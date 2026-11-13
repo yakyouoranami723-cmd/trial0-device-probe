@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c10">
+  <meta name="description" content="Trial Zero local model runtime test. Inference runs on this device.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <title>Trial Zero — 0.5B Model Test</title>
+  <style>
+    :root { color-scheme:dark; --bg:#0b0c10; --panel:#151720; --line:#303342; --pink:#ff7eb3; --text:#f5f6fa; --muted:#a7abba; --ok:#72d6a0; --warn:#ffd27a; --bad:#ff8b91; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at 80% 0%,#281627 0,transparent 35%),var(--bg); color:var(--text); font:16px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom); }
+    main { max-width:760px; margin:0 auto; padding:24px 0 44px; }
+    .brand { letter-spacing:.12em; color:var(--pink); font-size:12px; font-weight:800; }
+    h1 { margin:8px 0 6px; font-size:clamp(26px,7vw,36px); line-height:1.2; }
+    h2 { margin:0 0 10px; font-size:17px; }
+    .lead,.muted { color:var(--muted); }
+    .panel { background:rgba(21,23,32,.96); border:1px solid var(--line); border-radius:16px; padding:16px; margin:14px 0; }
+    .notice { border:1px solid #6c4760; background:#241725; border-radius:14px; padding:13px 14px; margin:16px 0; color:#f5dce8; }
+    .notice strong { color:#ffc0dc; }
+    .actions { display:grid; gap:10px; }
+    button { appearance:none; border:1px solid #8e5276; background:linear-gradient(110deg,#a83b74,#6d3a86); color:white; padding:14px 16px; font:700 16px system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; border-radius:12px; min-height:50px; width:100%; }
+    button.secondary { background:#202330; border-color:#44485a; }
+    button:disabled { opacity:.45; }
+    textarea { width:100%; min-height:100px; padding:12px; border-radius:11px; border:1px solid #44485a; background:#10121a; color:var(--text); font:inherit; resize:vertical; }
+    .status { min-height:24px; margin-top:10px; color:var(--muted); font-size:14px; overflow-wrap:anywhere; }
+    .bar { height:10px; background:#303342; border-radius:99px; overflow:hidden; margin:10px 0 5px; }
+    .bar > div { height:100%; width:0%; background:linear-gradient(90deg,#ff7eb3,#b77bff); transition:width .2s; }
+    .pill { display:inline-block; padding:3px 9px; border-radius:99px; background:#303342; color:var(--muted); font-size:12px; margin:2px 4px 2px 0; }
+    .pill.ok { background:#163326; color:var(--ok); }
+    .pill.warn { background:#3b2e16; color:var(--warn); }
+    .pill.bad { background:#3b1b22; color:var(--bad); }
+    .result { white-space:pre-wrap; overflow-wrap:anywhere; background:#10121a; border:1px solid var(--line); border-radius:12px; padding:13px; min-height:70px; }
+    a { color:#ffc0dc; }
+    code { overflow-wrap:anywhere; color:#ffd0e4; }
+    footer { color:var(--muted); font-size:12px; margin-top:22px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">TRIAL ZERO / LOCAL INFERENCE TEST</div>
+  <h1>0.5Bモデル<br>実機動作試験</h1>
+  <p class="lead">iPhone内で小型AIモデルを読み込み、日本語の短い返答を生成できるか確認します。</p>
+
+  <div class="notice"><strong>この試験では約483MBのモデル本体をダウンロードします。</strong><br>初回はWi-Fi接続と十分な充電を推奨します。モデル以外にTokenizer・設定ファイル・実行用ファイルも取得するため、合計通信量は483MBを超えます。モデルの読み込み中はアプリを閉じず、画面を開いたままにしてください。</div>
+
+  <section class="panel">
+    <h2>今回の試験モデル</h2>
+    <p><strong>Qwen2.5-0.5B-Instruct</strong></p>
+    <p class="muted">ONNX / q4f16 / WebGPU · モデル重み 約483MB · Apache-2.0系ライセンス</p>
+    <p class="muted">モデル情報：<a href="https://huggingface.co/onnx-community/Qwen2.5-0.5B-Instruct" target="_blank" rel="noopener">Hugging Face model card</a><br>実行ライブラリ：Transformers.js 4.3.2</p>
+    <div id="deviceInfo" class="status">端末情報を確認中…</div>
+  </section>
+
+  <section class="panel">
+    <h2>1. モデル設定を確認</h2>
+    <p class="muted">モデルの量子化ファイルが公開されているか確認します。この段階では約483MBのモデル本体はダウンロードしません。</p>
+    <div class="actions"><button id="checkBtn" class="secondary">モデル設定を確認</button></div>
+    <div id="checkStatus" class="status">未確認</div>
+  </section>
+
+  <section class="panel">
+    <h2>2. モデルをダウンロードして読み込む</h2>
+    <p class="muted">ボタンを押すまでモデル本体は取得しません。WebGPUが使えない場合はCPUへ自動切替せず、失敗として記録します。</p>
+    <div class="actions"><button id="loadBtn" disabled>モデルを読み込む（約483MB）</button></div>
+    <div class="bar"><div id="progressBar"></div></div>
+    <div id="loadStatus" class="status">先にモデル設定を確認してください。</div>
+  </section>
+
+  <section class="panel">
+    <h2>3. 日本語で生成テスト</h2>
+    <label for="prompt"><strong>入力文（個人情報は入力しないでください）</strong></label>
+    <textarea id="prompt">こんにちは。あなたは端末内で動く日本語会話モデルの動作確認用AIです。あなたの役割を短く説明してください。</textarea>
+    <div class="actions" style="margin-top:10px"><button id="generateBtn" disabled>端末内で回答を生成</button></div>
+    <div id="genStatus" class="status">モデル読み込み後に使用できます。</div>
+    <h2 style="margin-top:16px">生成結果</h2>
+    <div id="output" class="result">まだ生成していません。</div>
+  </section>
+
+  <section class="panel">
+    <h2>4. オフライン確認</h2>
+    <p class="muted">モデル読み込みと回答生成が成功したあと、いったんアプリを完全に閉じ、機内モードにしてホーム画面のアプリを再起動します。ページが開き、再度回答を生成できればオフライン動作の確認になります。</p>
+    <p class="muted">この試験ページ自体や実行ライブラリのキャッシュが不足していると、再起動時に開けない場合があります。その場合はWi-Fiへ戻して再度開けば大丈夫です。モデルキャッシュが消える可能性もあるため、初期段階では重要データを保存しないでください。</p>
+    <div id="cacheStatus" class="status">モデル読み込み後にキャッシュ状態を確認できます。</div>
+  </section>
+
+  <section class="panel">
+    <h2>プライバシーと注意</h2>
+    <ul>
+      <li>Firebase・ChatGPT APIなど外部推論APIには接続しません。</li>
+      <li>入力文の推論は端末内で行います。入力文をHugging Faceへ送信しません。</li>
+      <li>初回はTransformers.jsのライブラリを配信元から、モデルファイルをHugging Faceからダウンロードします。</li>
+      <li>モデルの品質評価ではなく、まず読み込み・生成・再起動・オフライン動作を確認する試験です。</li>
+      <li>iPhoneが高温になる、アプリが終了する、応答しなくなる場合は試験を中止してください。</li>
+    </ul>
+  </section>
+
+  <p><a href="./">← 端末診断へ戻る</a></p>
+  <footer>Trial Zero / Model Probe v0.1 · Transformers.js 4.3.2 · Qwen2.5-0.5B-Instruct · No Firebase · No inference API</footer>
+</main>
+<script type="module" src="./model-test.js"></script>
+</body>
+</html>
