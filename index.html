@@ -36,6 +36,7 @@
     summary { cursor:pointer; color:var(--text); font-weight:650; }
     code { overflow-wrap:anywhere; color:#ffd0e4; }
     footer { color:var(--muted); font-size:12px; margin-top:22px; }
+    .probe-link { display:block; text-decoration:none; text-align:center; border:1px solid #8e5276; background:#241725; color:#ffc0dc; border-radius:12px; padding:13px 14px; font-weight:750; }
     @media (min-width:600px) { .actions { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
@@ -46,6 +47,12 @@
   <p class="lead">iPhone上で、AIを動かす土台となる機能が使えるかを調べるための診断ページ。</p>
 
   <div class="notice"><strong>これはAIモデルを動かすテストではありません。</strong><br>大きなモデルのダウンロードや、Firebaseへの接続は行いません。短いGPU計算・保存領域・暗号化機能だけを確認します。</div>
+
+  <section class="panel">
+    <h2>次の段階：ローカルAIモデル試験</h2>
+    <p>端末診断が済んだら、軽量な日本語モデルをiPhone内で動かす試験に進めます。</p>
+    <a class="probe-link" href="./model-test.html">0.5Bモデル試験を開く →</a>
+  </section>
 
   <section class="panel">
     <h2>診断の実行</h2>
