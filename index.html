@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c10">
+  <meta name="description" content="Trial Zero Phase 0 device capability check. No account, model download, or telemetry.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <title>Trial Zero — Phase 0 Check</title>
+  <style>
+    :root { color-scheme: dark; --bg:#0b0c10; --panel:#151720; --line:#303342; --pink:#ff7eb3; --text:#f5f6fa; --muted:#a7abba; --ok:#72d6a0; --warn:#ffd27a; --bad:#ff8b91; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(circle at 80% 0%,#281627 0,transparent 35%),var(--bg); color:var(--text); font:16px/1.5 system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom); }
+    main { max-width:760px; margin:0 auto; padding:28px 0 44px; }
+    .brand { letter-spacing:.12em; color:var(--pink); font-size:12px; font-weight:800; }
+    h1 { margin:8px 0 6px; font-size:clamp(27px,7vw,38px); line-height:1.15; }
+    .lead { color:var(--muted); margin:0 0 22px; }
+    .notice { border:1px solid #6c4760; background:#241725; border-radius:14px; padding:13px 14px; margin:16px 0; }
+    .notice strong { color:#ffc0dc; }
+    .panel { background:rgba(21,23,32,.94); border:1px solid var(--line); border-radius:16px; padding:16px; margin:14px 0; }
+    .panel h2 { margin:0 0 10px; font-size:17px; }
+    .actions { display:grid; grid-template-columns:1fr; gap:10px; margin-top:14px; }
+    button { appearance:none; border:1px solid #8e5276; background:linear-gradient(110deg,#a83b74,#6d3a86); color:white; padding:14px 16px; font:700 16px system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; border-radius:12px; min-height:50px; width:100%; }
+    button.secondary { background:#202330; border-color:#44485a; }
+    button:disabled { opacity:.55; }
+    .status { color:var(--muted); font-size:14px; min-height:22px; margin-top:10px; }
+    .results { display:grid; gap:8px; }
+    .result { display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center; padding:10px 11px; border:1px solid var(--line); border-radius:11px; background:#10121a; }
+    .result small { display:block; color:var(--muted); font-size:12px; overflow-wrap:anywhere; }
+    .pill { font-size:12px; padding:4px 8px; border-radius:999px; background:#303342; color:var(--muted); white-space:nowrap; }
+    .pill.ok { color:var(--ok); background:#163326; }
+    .pill.warn { color:var(--warn); background:#3b2e16; }
+    .pill.bad { color:var(--bad); background:#3b1b22; }
+    details { color:var(--muted); }
+    summary { cursor:pointer; color:var(--text); font-weight:650; }
+    code { overflow-wrap:anywhere; color:#ffd0e4; }
+    footer { color:var(--muted); font-size:12px; margin-top:22px; }
+    @media (min-width:600px) { .actions { grid-template-columns:1fr 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">TRIAL ZERO / INTERNAL TEST</div>
+  <h1>Phase 0<br>端末チェック</h1>
+  <p class="lead">iPhone上で、AIを動かす土台となる機能が使えるかを調べるための診断ページ。</p>
+
+  <div class="notice"><strong>これはAIモデルを動かすテストではありません。</strong><br>大きなモデルのダウンロードや、Firebaseへの接続は行いません。短いGPU計算・保存領域・暗号化機能だけを確認します。</div>
+
+  <section class="panel">
+    <h2>診断の実行</h2>
+    <p class="lead">HTTPSで開いてから実行してください。可能ならSafariの「ホーム画面に追加」で開いた状態でも診断します。</p>
+    <div class="actions">
+      <button id="runBtn">端末チェックを実行</button>
+      <button id="exportBtn" class="secondary" disabled>結果をJSONで保存</button>
+      <button id="copyBtn" class="secondary" disabled>結果の概要をコピー</button>
+      <button id="clearBtn" class="secondary">画面の診断結果を消去</button>
+    </div>
+    <div id="status" class="status" role="status" aria-live="polite">まだ診断していません。</div>
+  </section>
+
+  <section class="panel">
+    <h2>診断結果</h2>
+    <div id="results" class="results"><div class="status">実行するとここに結果が表示されます。</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>このページが確認するもの</h2>
+    <ul>
+      <li>安全な接続（HTTPS）とホーム画面アプリとしての起動状態</li>
+      <li>WebGPUの有無と、ごく小さな計算が実行できるか</li>
+      <li>IndexedDB・OPFSの読み書き</li>
+      <li>保存領域の概算と永続化の状態</li>
+      <li>Web Cryptoによる暗号化・復号の基本動作</li>
+      <li>Service Workerの登録状態</li>
+    </ul>
+    <details>
+      <summary>プライバシーと安全性</summary>
+      <p>この診断ページはFirebase、広告、解析サービス、外部AIへ接続しません。モデルもダウンロードしません。結果は端末内で表示し、あなたがJSON保存やコピーを押した場合にだけ外へ持ち出せます。診断用の一時データは確認後に削除します。</p>
+      <p>WebGPUでは小さな整数計算を1回だけ行います。大きな負荷テストではありません。</p>
+    </details>
+  </section>
+
+  <footer>Trial Zero / Phase 0 Probe v0.1 · No Firebase · No model · No telemetry</footer>
+</main>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  let latestReport = null;
+  const checks = [];
+
+  function addCheck(id, label, status, detail, extra = {}) {
+    const item = { id, label, status, detail, ...extra };
+    checks.push(item);
+    const row = document.createElement('div');
+    row.className = 'result';
+    const left = document.createElement('div');
+    const title = document.createElement('strong');
+    title.textContent = label;
+    const sub = document.createElement('small');
+    sub.textContent = detail || '';
+    left.append(title, sub);
+    const pill = document.createElement('span');
+    pill.className = `pill ${status === 'OK' ? 'ok' : status === '注意' ? 'warn' : status === 'NG' ? 'bad' : ''}`;
+    pill.textContent = status;
+    row.append(left, pill);
+    $('results').append(row);
+  }
+
+  function errorText(error) {
+    if (!error) return '不明なエラー';
+    return `${error.name || 'Error'}: ${error.message || String(error)}`;
+  }
+
+  function idbRequest(request) {
+    return new Promise((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error('IndexedDB request failed'));
+    });
+  }
+
+  function idbTransaction(tx) {
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('IndexedDB transaction failed'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+    });
+  }
+
+  async function testIndexedDB() {
+    if (!('indexedDB' in window)) throw new Error('IndexedDB APIがありません');
+    const dbName = `trial0-probe-${Date.now()}`;
+    const openReq = indexedDB.open(dbName, 1);
+    openReq.onupgradeneeded = () => openReq.result.createObjectStore('probe');
+    const db = await idbRequest(openReq);
+    try {
+      const writeTx = db.transaction('probe', 'readwrite');
+      writeTx.objectStore('probe').put('trial0-phase0-ok', 'probe-key');
+      await idbTransaction(writeTx);
+      const readTx = db.transaction('probe', 'readonly');
+      const value = await idbRequest(readTx.objectStore('probe').get('probe-key'));
+      if (value !== 'trial0-phase0-ok') throw new Error('読み出した値が一致しません');
+    } finally {
+      db.close();
+      await idbRequest(indexedDB.deleteDatabase(dbName));
+    }
+    return '書き込み・読み出し・削除 OK';
+  }
+
+  async function testOPFS() {
+    if (!navigator.storage || typeof navigator.storage.getDirectory !== 'function') throw new Error('OPFS APIがありません');
+    const root = await navigator.storage.getDirectory();
+    const fileName = `trial0-probe-${Date.now()}.txt`;
+    const handle = await root.getFileHandle(fileName, { create: true });
+    try {
+      const writer = await handle.createWritable();
+      await writer.write('trial0-phase0-opfs-ok');
+      await writer.close();
+      const file = await handle.getFile();
+      const text = await file.text();
+      if (text !== 'trial0-phase0-opfs-ok') throw new Error('読み出した値が一致しません');
+    } finally {
+      await root.removeEntry(fileName).catch(() => {});
+    }
+    return '書き込み・読み出し・削除 OK';
+  }
+
+  async function testCrypto() {
+    if (!window.isSecureContext || !crypto.subtle) throw new Error('HTTPS等の安全なコンテキスト、またはSubtleCryptoがありません');
+    const rawKey = crypto.getRandomValues(new Uint8Array(32));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const plain = new TextEncoder().encode('trial0-phase0-crypto-ok');
+    const key = await crypto.subtle.importKey('raw', rawKey, 'AES-GCM', false, ['encrypt', 'decrypt']);
+    const cipher = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, plain);
+    const decoded = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, cipher);
+    const result = new TextDecoder().decode(decoded);
+    if (result !== 'trial0-phase0-crypto-ok') throw new Error('復号結果が一致しません');
+    return 'AES-GCM 暗号化・復号 OK（テスト鍵は保存していません）';
+  }
+
+  async function testWebGPU() {
+    if (!navigator.gpu) throw new Error('navigator.gpu がありません');
+    const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'low-power' });
+    if (!adapter) throw new Error('GPUAdapterを取得できません');
+    const device = await adapter.requestDevice();
+    try {
+      const shader = `
+        @group(0) @binding(0) var<storage, read_write> output: array<u32>;
+        @compute @workgroup_size(1)
+        fn main() { output[0] = 42u; }
+      `;
+      const module = device.createShaderModule({ code: shader });
+      if (module.getCompilationInfo) {
+        const info = await module.getCompilationInfo();
+        const errors = info.messages.filter((m) => m.type === 'error');
+        if (errors.length) throw new Error(errors.map((m) => m.message).join(' / '));
+      }
+      const output = device.createBuffer({ size: 4, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+      const readback = device.createBuffer({ size: 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+      const pipeline = device.createComputePipeline({ layout: 'auto', compute: { module, entryPoint: 'main' } });
+      const bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: output } }]
+      });
+      const encoder = device.createCommandEncoder();
+      const pass = encoder.beginComputePass();
+      pass.setPipeline(pipeline);
+      pass.setBindGroup(0, bindGroup);
+      pass.dispatchWorkgroups(1);
+      pass.end();
+      encoder.copyBufferToBuffer(output, 0, readback, 0, 4);
+      device.queue.submit([encoder.finish()]);
+      await readback.mapAsync(GPUMapMode.READ);
+      const value = new Uint32Array(readback.getMappedRange())[0];
+      readback.unmap();
+      output.destroy();
+      readback.destroy();
+      if (value !== 42) throw new Error(`計算結果が42ではありません（${value}）`);
+      const info = adapter.info || {};
+      return {
+        detail: 'WebGPUで小さな計算を実行し、結果42を確認',
+        adapterInfo: {
+          vendor: info.vendor || null,
+          architecture: info.architecture || null,
+          device: info.device || null,
+          description: info.description || null
+        },
+        limits: {
+          maxBufferSize: adapter.limits?.maxBufferSize ?? null,
+          maxStorageBufferBindingSize: adapter.limits?.maxStorageBufferBindingSize ?? null,
+          maxComputeWorkgroupStorageSize: adapter.limits?.maxComputeWorkgroupStorageSize ?? null,
+          maxComputeInvocationsPerWorkgroup: adapter.limits?.maxComputeInvocationsPerWorkgroup ?? null
+        }
+      };
+    } finally {
+      device.destroy();
+    }
+  }
+
+  async function runChecks() {
+    checks.length = 0;
+    $('results').replaceChildren();
+    $('runBtn').disabled = true;
+    $('exportBtn').disabled = true;
+    $('copyBtn').disabled = true;
+    latestReport = null;
+    $('status').textContent = '診断中…';
+    const environment = {
+      testedAt: new Date().toISOString(),
+      secureContext: window.isSecureContext,
+      userAgent: navigator.userAgent,
+      language: navigator.language || null,
+      onlineAtTest: navigator.onLine,
+      displayModeStandalone: window.matchMedia('(display-mode: standalone)').matches,
+      iosStandalone: Boolean(navigator.standalone),
+      screen: { width: screen.width, height: screen.height, pixelRatio: window.devicePixelRatio || 1 }
+    };
+    try {
+      addCheck('https', 'HTTPS / 安全な接続', window.isSecureContext ? 'OK' : 'NG', window.isSecureContext ? '安全なコンテキストです' : 'HTTPSで開き直してください');
+      addCheck('standalone', 'ホーム画面アプリ起動', (environment.displayModeStandalone || environment.iosStandalone) ? 'OK' : '注意', (environment.displayModeStandalone || environment.iosStandalone) ? 'ホーム画面アプリとして起動中' : 'Safariの通常タブです。追加後にも診断すると保存条件を比較できます');
+      addCheck('online', 'ネット接続', navigator.onLine ? 'OK' : '注意', navigator.onLine ? '診断開始時点でオンライン' : '診断開始時点でオフライン');
+
+      try {
+        const gpu = await testWebGPU();
+        addCheck('webgpu', 'WebGPU / GPU計算', 'OK', gpu.detail, { adapterInfo: gpu.adapterInfo, limits: gpu.limits });
+      } catch (e) {
+        addCheck('webgpu', 'WebGPU / GPU計算', 'NG', errorText(e));
+      }
+
+      try {
+        const result = await testIndexedDB();
+        addCheck('indexeddb', 'IndexedDB', 'OK', result);
+      } catch (e) {
+        addCheck('indexeddb', 'IndexedDB', 'NG', errorText(e));
+      }
+
+      try {
+        const result = await testOPFS();
+        addCheck('opfs', 'OPFS（大きなファイル向け保存領域）', 'OK', result);
+      } catch (e) {
+        addCheck('opfs', 'OPFS（大きなファイル向け保存領域）', '注意', errorText(e));
+      }
+
+      try {
+        const storage = navigator.storage;
+        if (!storage || !storage.estimate) throw new Error('Storage APIがありません');
+        const estimate = await storage.estimate();
+        const before = storage.persisted ? await storage.persisted() : null;
+        const requested = storage.persist ? await storage.persist() : null;
+        const after = storage.persisted ? await storage.persisted() : null;
+        const usage = Number.isFinite(estimate.usage) ? estimate.usage : null;
+        const quota = Number.isFinite(estimate.quota) ? estimate.quota : null;
+        const fmt = (n) => n == null ? '不明' : `${(n / (1024 * 1024)).toFixed(1)} MB`;
+        let status = after === true ? 'OK' : '注意';
+        addCheck('storage', '保存容量・永続化', status,
+          `使用量 ${fmt(usage)} / 推定上限 ${fmt(quota)} · 永続化 ${before === true ? '開始前から有効' : after === true ? '要求後に有効' : '未確認または未許可'}`,
+          { usageBytes: usage, quotaBytes: quota, persistedBefore: before, persistRequestResult: requested, persistedAfter: after });
+      } catch (e) {
+        addCheck('storage', '保存容量・永続化', '注意', errorText(e));
+      }
+
+      try {
+        const result = await testCrypto();
+        addCheck('crypto', 'Web Crypto / AES-GCM', 'OK', result);
+      } catch (e) {
+        addCheck('crypto', 'Web Crypto / AES-GCM', 'NG', errorText(e));
+      }
+
+      try {
+        if (!('serviceWorker' in navigator)) throw new Error('Service Worker APIがありません');
+        const registration = await navigator.serviceWorker.register('./sw.js');
+        await navigator.serviceWorker.ready;
+        addCheck('serviceworker', 'Service Worker', 'OK', `登録済み · scope: ${registration.scope}`);
+      } catch (e) {
+        addCheck('serviceworker', 'Service Worker', '注意', errorText(e));
+      }
+
+      latestReport = { app: 'Trial Zero Phase 0 Probe', version: '0.1', environment, checks };
+      $('status').textContent = '診断が完了しました。結果をJSONで保存して共有できます。';
+      $('exportBtn').disabled = false;
+      $('copyBtn').disabled = false;
+    } finally {
+      $('runBtn').disabled = false;
+    }
+  }
+
+  $('runBtn').addEventListener('click', () => runChecks().catch((e) => { $('status').textContent = `診断を完了できませんでした: ${errorText(e)}`; $('runBtn').disabled = false; }));
+  $('exportBtn').addEventListener('click', () => {
+    if (!latestReport) return;
+    const blob = new Blob([JSON.stringify(latestReport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trial0-phase0-report-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  $('copyBtn').addEventListener('click', async () => {
+    if (!latestReport) return;
+    const text = JSON.stringify(latestReport, null, 2);
+    try {
+      await navigator.clipboard.writeText(text);
+      $('status').textContent = '結果をクリップボードにコピーしました。';
+    } catch (e) {
+      $('status').textContent = `コピーできませんでした: ${errorText(e)}（JSON保存を使ってください）`;
+    }
+  });
+  $('clearBtn').addEventListener('click', () => {
+    checks.length = 0;
+    latestReport = null;
+    $('results').innerHTML = '<div class="status">診断結果を消去しました。</div>';
+    $('status').textContent = 'まだ診断していません。';
+    $('exportBtn').disabled = true;
+    $('copyBtn').disabled = true;
+  });
+
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+})();
+</script>
+</body>
+</html>
