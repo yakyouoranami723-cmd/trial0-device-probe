@@ -41,7 +41,7 @@
 <body>
 <main>
   <div class="brand">TRIAL ZERO / LOCAL INFERENCE TEST</div>
-  <h1>0.5Bモデル<br>実機動作試験</h1>
+  <h1>0.5Bモデル<br>実機動作試験 v0.2.1</h1>
   <p class="lead">iPhone内で小型AIモデルを読み込み、日本語の短い返答を生成できるか確認します。</p>
 
   <div class="notice"><strong>この試験では約483MBのモデル本体をダウンロードします。</strong><br>初回はWi-Fi接続と十分な充電を推奨します。モデル以外にTokenizer・設定ファイル・実行用ファイルも取得するため、合計通信量は483MBを超えます。モデルの読み込み中はアプリを閉じず、画面を開いたままにしてください。</div>
@@ -70,6 +70,26 @@
   </section>
 
   <section class="panel">
+    <h2>今回の読み込み条件</h2>
+    <p><strong>WebGPU / q4f16 / ONNX Runtime標準設定</strong></p>
+    <p class="muted">今回は追加の最適化器設定を指定せず、標準条件で読み込みを記録します。ConstantFoldingを無効化する案は過去の仮説として保留します。現在のONNX Runtime JavaScript資料では session_options.extra はWebAssemblyバックエンド向けとされているため、このWebGPU試験で有効と見なせないためです。</p>
+    <p class="muted">まず標準条件で、ファイル取得とセッション初期化のどこまで進むかを記録します。設定を複数同時に変えず、原因を切り分けます。</p>
+  </section>
+
+  <section class="panel">
+    <h2>診断ログ（端末内に保存）</h2>
+    <p class="muted">処理段階、取得ファイル名、進捗イベント、エラー情報を記録します。入力文と生成した回答は記録しません。ログはこの端末のブラウザ内だけに保存します。</p>
+    <div class="actions">
+      <button id="copyLogBtn" class="secondary">診断ログをコピー</button>
+      <button id="downloadLogBtn" class="secondary">診断ログをJSON保存</button>
+      <button id="clearModelCacheBtn" class="secondary">この試験のモデルキャッシュを削除</button>
+      <button id="clearLogBtn" class="secondary">この端末の診断ログを削除</button>
+    </div>
+    <div id="logStatus" class="status" role="status" aria-live="polite">ログはこの端末に保存されます。</div>
+    <pre id="eventLog" class="result" style="max-height:280px;overflow:auto;font-size:12px">ログを読み込み中…</pre>
+  </section>
+
+  <section class="panel">
     <h2>3. 日本語で生成テスト</h2>
     <label for="prompt"><strong>入力文（個人情報は入力しないでください）</strong></label>
     <textarea id="prompt">こんにちは。あなたは端末内で動く日本語会話モデルの動作確認用AIです。あなたの役割を短く説明してください。</textarea>
@@ -95,10 +115,11 @@
       <li>モデルの品質評価ではなく、まず読み込み・生成・再起動・オフライン動作を確認する試験です。</li>
       <li>iPhoneが高温になる、アプリが終了する、応答しなくなる場合は試験を中止してください。</li>
     </ul>
+    <p class="muted">読み込み失敗時は繰り返し試さず、診断ログを保存して共有してください。モデルのダウンロード完了・初期化完了・日本語生成成功・再起動後のオフライン生成成功は別々に判定します。</p>
   </section>
 
   <p><a href="./">← 端末診断へ戻る</a></p>
-  <footer>Trial Zero / Model Probe v0.1 · Transformers.js 4.3.2 · Qwen2.5-0.5B-Instruct · No Firebase · No inference API</footer>
+  <footer>Trial Zero / Model Probe v0.2.1 · Transformers.js 4.3.2 · Qwen2.5-0.5B-Instruct · No Firebase · No inference API</footer>
 </main>
 <script type="module" src="./model-test.js"></script>
 </body>
