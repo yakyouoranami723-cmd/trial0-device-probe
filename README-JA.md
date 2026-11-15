@@ -1,22 +1,23 @@
-# Trial Zero Phase 0 Device Probe v0.1
+[README-JA.md](https://github.com/user-attachments/files/34864641/README-JA.md)
+# Trial Zero — Device / Local Model Probe
 
-これは試験体0の端末診断専用ページです。AIモデル、Firebase SDK、APIキー、ユーザーの個人データは含みません。
+試験体0の開発用に、端末の機能確認とローカルAIモデルの実機試験を行う小さなPWAです。
 
-## GitHub Pagesで公開する場合
+## 含まれる機能
 
-1. このフォルダの中身だけを、新しい専用リポジトリへアップロードします。既存のTrial Zero本体やライメイのリポジトリは使いません。
-2. リポジトリの Settings → Pages を開きます。
-3. Build and deployment の Source を Deploy from a branch にし、Branch を `main`、Folder を `/(root)` にして Save します。
-4. 公開URLが表示されるまで待ちます。公開URLは誰でも閲覧できます。
-5. iPhoneのSafariで公開URLを開き、診断を実行します。
+- `index.html`: Phase 0端末診断（WebGPU、IndexedDB、OPFS、Web Crypto、Service Worker等）
+- `model-test.html` / `model-test.js`: Qwen2.5-0.5B-InstructのONNX / q4f16 / WebGPU試験
+- `sw.js`: アプリシェルとTransformers.jsライブラリのキャッシュ
+- `manifest.webmanifest` / `icon.svg`: PWA設定とアイコン
 
-注意：GitHub FreeではPagesのソースリポジトリは公開設定が必要です。公開するのはこの診断ファイルだけにしてください。公開前にリポジトリの中身を確認してください。GitHub Pagesで公開されたサイトはインターネット上から閲覧できます。
+このリポジトリは診断・モデル試験用です。Trial Zero本体、ライメイの実データ、Firebase設定、APIキー、個人情報は置かないでください。
 
-## iPhoneでの検査
+## モデル試験 v0.2.1
 
-1. Safariの通常タブで開き、診断を実行して結果をコピーします。
-2. 共有メニューから「ホーム画面に追加」を選び、「Webアプリとして開く」を有効にして追加します。
-3. ホーム画面のアイコンから開き、再度診断して結果をコピーします。
-4. JSONまたはコピーした内容は公開リポジトリへ保存せず、個別に共有してください。
+`README-JA-MODEL-TEST.md` に、試験順序・注意事項・ログの共有方法をまとめています。
 
-この診断はGPUの小さな計算を行うだけで、AIモデルをダウンロード・実行しません。WebGPUがOKでも、LLMが安定して動く保証にはなりません。
+v0.2.1では、モデル取得・読み込みの段階、ファイル単位のイベント、ページの表示状態、エラーを端末内ログへ記録します。入力文と生成結果はログに含めません。ConstantFolding無効化の仮説は保留しています。ONNX Runtimeの現行JavaScript API資料では session_options.extra はWebAssemblyバックエンド向けとされ、今回のWebGPU試験で有効と確認できていないためです。モデルキャッシュ識別子は既存値を維持し、診断コードの更新だけで483MBモデルの再取得を強制しません。
+
+## GitHub Pages
+
+このリポジトリの `main` ブランチのルートをGitHub Pagesの公開元に設定した場合、ページはインターネット上から閲覧できるようになります。公開前にファイルを確認し、診断JSONや個人情報をリポジトリへアップロードしないでください。
