@@ -1,7 +1,7 @@
 'use strict';
-const CACHE_NAME = 'trial0-phase0-shell-v05';
+const CACHE_NAME = 'trial0-phase0-shell-v06';
 const LIB_CACHE_NAME = 'trial0-runtime-jsdelivr-v01';
-const SHELL_FILES = ['./', './index.html', './model-test.html', './model-test.js', './manifest.webmanifest', './icon.svg'];
+const SHELL_FILES = ['./', './index.html', './model-test.html', './model-test.js', './cache-inspector.js', './manifest.webmanifest', './icon.svg'];
 const TRANSFORMERS_CDN_PREFIX = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2';
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
@@ -22,7 +22,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   // Cache only the explicitly pinned Transformers.js package; model files are
-  // cached separately by Transformers.js under its own Cache API key.
+  // cached separately by Transformers.js under its own Cache Storage key.
   if (request.url.startsWith(TRANSFORMERS_CDN_PREFIX)) {
     event.respondWith((async () => {
       const cache = await caches.open(LIB_CACHE_NAME);

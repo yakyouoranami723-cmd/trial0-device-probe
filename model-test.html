@@ -7,7 +7,7 @@
   <meta name="description" content="Trial Zero local model runtime test. Inference runs on this device.">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <title>Trial Zero — 0.5B Model Test v0.2.2</title>
+  <title>Trial Zero — 0.5B Model Test v0.2.3</title>
   <style>
     :root { color-scheme:dark; --bg:#0b0c10; --panel:#151720; --line:#303342; --pink:#ff7eb3; --text:#f5f6fa; --muted:#a7abba; --ok:#72d6a0; --warn:#ffd27a; --bad:#ff8b91; }
     * { box-sizing:border-box; }
@@ -30,10 +30,6 @@
     .status { min-height:24px; margin-top:10px; color:var(--muted); font-size:14px; overflow-wrap:anywhere; }
     .bar { height:10px; background:#303342; border-radius:99px; overflow:hidden; margin:10px 0 5px; }
     .bar > div { height:100%; width:0%; background:linear-gradient(90deg,#ff7eb3,#b77bff); transition:width .2s; }
-    .pill { display:inline-block; padding:3px 9px; border-radius:99px; background:#303342; color:var(--muted); font-size:12px; margin:2px 4px 2px 0; }
-    .pill.ok { background:#163326; color:var(--ok); }
-    .pill.warn { background:#3b2e16; color:var(--warn); }
-    .pill.bad { background:#3b1b22; color:var(--bad); }
     .result { white-space:pre-wrap; overflow-wrap:anywhere; background:#10121a; border:1px solid var(--line); border-radius:12px; padding:13px; min-height:70px; }
     a { color:#ffc0dc; }
     code { overflow-wrap:anywhere; color:#ffd0e4; }
@@ -43,9 +39,8 @@
 <body>
 <main>
   <div class="brand">TRIAL ZERO / LOCAL INFERENCE TEST</div>
-  <h1>0.5Bモデル<br>実機動作試験 v0.2.2</h1>
+  <h1>0.5Bモデル<br>実機動作試験 v0.2.3</h1>
   <p class="lead">iPhone内で小型AIモデルを読み込み、日本語の短い返答を生成できるか確認します。</p>
-
   <div class="notice"><strong>この試験では約483MBのモデル本体をダウンロードします。</strong><br>初回はWi-Fi接続と十分な充電を推奨します。モデル以外にTokenizer・設定ファイル・実行用ファイルも取得するため、合計通信量は483MBを超えます。モデルの読み込み中はアプリを閉じず、画面を開いたままにしてください。</div>
 
   <section class="panel">
@@ -108,7 +103,18 @@
   </section>
 
   <section class="panel">
-    <h2>4. オフライン確認</h2>
+    <h2>4. 保存済みモデルキャッシュの確認</h2>
+    <p class="muted">モデルキャッシュが端末内に残っているか、読み取り専用で確認します。約483MBのファイル本文は読み出しません。キャッシュの作成・削除・再ダウンロード・永続化要求は行いません。</p>
+    <div class="actions">
+      <button id="inspectModelCacheBtn" class="secondary">保存済みキャッシュを確認</button>
+      <button id="downloadCacheReportBtn" class="secondary">キャッシュ診断をJSON保存</button>
+    </div>
+    <div id="cacheInspectionStatus" class="status" role="status" aria-live="polite">ページを開くと自動確認します。</div>
+    <pre id="cacheInspectionDetails" class="result" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">確認結果を表示します。</pre>
+  </section>
+
+  <section class="panel">
+    <h2>5. オフライン確認</h2>
     <p class="muted">モデル読み込みと回答生成が成功したあと、いったんアプリを完全に閉じ、機内モードにしてホーム画面のアプリを再起動します。ページが開き、再度回答を生成できればオフライン動作の確認になります。</p>
     <p class="muted">この試験ページ自体や実行ライブラリのキャッシュが不足していると、再起動時に開けない場合があります。その場合はWi-Fiへ戻して再度開けば大丈夫です。モデルキャッシュが消える可能性もあるため、初期段階では重要データを保存しないでください。</p>
     <div id="cacheStatus" class="status">モデル読み込み後にキャッシュ状態を確認できます。</div>
@@ -127,8 +133,9 @@
   </section>
 
   <p><a href="./">← 端末診断へ戻る</a></p>
-  <footer>Trial Zero / Model Probe v0.2.2 · Transformers.js 4.3.2 · Qwen2.5-0.5B-Instruct · No Firebase · No inference API</footer>
+  <footer>Trial Zero / Model Probe v0.2.3 · Transformers.js 4.3.2 · Qwen2.5-0.5B-Instruct · No Firebase · No inference API</footer>
 </main>
 <script type="module" src="./model-test.js"></script>
+<script type="module" src="./cache-inspector.js"></script>
 </body>
 </html>
