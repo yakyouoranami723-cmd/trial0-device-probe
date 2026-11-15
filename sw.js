@@ -1,5 +1,5 @@
 'use strict';
-const CACHE_NAME = 'trial0-phase0-shell-v04';
+const CACHE_NAME = 'trial0-phase0-shell-v05';
 const LIB_CACHE_NAME = 'trial0-runtime-jsdelivr-v01';
 const SHELL_FILES = ['./', './index.html', './model-test.html', './model-test.js', './manifest.webmanifest', './icon.svg'];
 const TRANSFORMERS_CDN_PREFIX = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2';

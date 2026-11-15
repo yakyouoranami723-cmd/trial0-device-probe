@@ -1,4 +1,4 @@
-const APP_VERSION = '0.2.1-diagnostics';
+const APP_VERSION = '0.2.2-cf-experiment';
 const MODEL_ID = 'onnx-community/Qwen2.5-0.5B-Instruct';
 const DTYPE = 'q4f16';
 const CACHE_KEY = 'trial0-transformers-qwen25-05b-v01';
@@ -10,6 +10,8 @@ const SESSION_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slic
 let generator = null;
 let isBusy = false;
 let configConfirmed = false;
+let loadAttempted = false;
+let activeOptimizerMode = 'disable-constant-folding';
 let transformersModule = null;
 let eventLog = [];
 let currentStage = 'page_init';
@@ -117,7 +119,8 @@ function setStage(stage) {
 function setBusy(value) {
   isBusy = value;
   $('checkBtn').disabled = value || configConfirmed;
-  $('loadBtn').disabled = value || !configConfirmed || Boolean(generator);
+  $('optimizerMode').disabled = value || loadAttempted;
+  $('loadBtn').disabled = value || !configConfirmed || Boolean(generator) || loadAttempted;
   $('generateBtn').disabled = value || !generator;
   $('clearModelCacheBtn').disabled = value;
 }
@@ -164,6 +167,43 @@ async function getTransformers() {
   }
 }
 
+function getSelectedOptimizerMode() {
+  return $('optimizerMode')?.value === 'disable-constant-folding'
+    ? 'disable-constant-folding'
+    : 'standard';
+}
+
+function getOnnxRuntimeWebVersion() {
+  const version = transformersModule?.env?.backends?.onnx?.versions?.web;
+  return typeof version === 'string' ? version : null;
+}
+
+function updateOptimizerDescription() {
+  const mode = getSelectedOptimizerMode();
+  if (mode === 'disable-constant-folding') {
+    setStatus(
+      'optimizerDescription',
+      '実験条件：ConstantFoldingを無効化する設定をONNX Runtimeへ渡します。WebGPUでの正式サポートは保証されていないため、結果を比較するための実験です。'
+    );
+  } else {
+    setStatus(
+      'optimizerDescription',
+      '標準条件：追加のsession_optionsは渡しません。前回の試験と同じ標準設定です。'
+    );
+  }
+}
+
+function makeSessionOptions() {
+  if (activeOptimizerMode === 'disable-constant-folding') {
+    return {
+      extra: {
+        'optimization.disable_specified_optimizers': 'ConstantFolding',
+      },
+    };
+  }
+  return {};
+}
+
 async function updateCacheStatus() {
   if (!('caches' in window)) {
     setStatus('cacheStatus', 'Cache APIが利用できません。');
@@ -200,13 +240,23 @@ function showDeviceInfo() {
 }
 
 function makeReport() {
+  const sessionOptions = makeSessionOptions();
   return {
     app: 'Trial Zero 0.5B Model Probe',
     version: APP_VERSION,
     exportedAt: new Date().toISOString(),
     model: { id: MODEL_ID, dtype: DTYPE, cacheKey: CACHE_KEY },
-    runtime: { library: '@huggingface/transformers', version: '4.3.2', device: 'webgpu' },
-    sessionOptions: 'Transformers.js / ONNX Runtime defaults; no experimental optimizer override.',
+    runtime: {
+      library: '@huggingface/transformers',
+      version: '4.3.2',
+      onnxruntimeWebVersion: getOnnxRuntimeWebVersion(),
+      device: 'webgpu',
+    },
+    testCondition: {
+      optimizerMode: activeOptimizerMode,
+      sessionOptions,
+      supportNote: 'ConstantFolding override is experimental for WebGPU; official SessionOptions docs list extra as WebAssembly-only.',
+    },
     environment: getEnvironment(),
     events: eventLog.slice(),
     privacy: '入力文と生成結果はログに含めません。',
@@ -260,7 +310,19 @@ async function clearModelCaches() {
 
 restoreLog();
 showDeviceInfo();
-recordEvent('page_open', { version: APP_VERSION, environment: getEnvironment() });
+activeOptimizerMode = getSelectedOptimizerMode();
+updateOptimizerDescription();
+recordEvent('page_open', {
+  version: APP_VERSION,
+  optimizerMode: activeOptimizerMode,
+  environment: getEnvironment(),
+});
+$('optimizerMode').addEventListener('change', () => {
+  if (loadAttempted) return;
+  activeOptimizerMode = getSelectedOptimizerMode();
+  updateOptimizerDescription();
+  recordEvent('optimizer_mode_selected', { optimizerMode: activeOptimizerMode });
+});
 window.addEventListener('online', () => { showDeviceInfo(); recordEvent('network_online'); });
 window.addEventListener('offline', () => { showDeviceInfo(); recordEvent('network_offline'); });
 document.addEventListener('visibilitychange', () => recordEvent('visibility_change', { visibilityState: document.visibilityState }));
@@ -304,19 +366,30 @@ $('checkBtn').addEventListener('click', async () => {
 });
 
 $('loadBtn').addEventListener('click', async () => {
-  if (isBusy || !configConfirmed || generator) return;
-  const ok = window.confirm('約483MBのモデル本体と付属ファイルをダウンロードします。Wi-Fi接続中で、充電に余裕がある状態ですか？');
+  if (isBusy || !configConfirmed || generator || loadAttempted) return;
+  const ok = window.confirm('約483MBのモデル本体と付属ファイルを読み込みます。Wi-Fi接続中で、充電に余裕がある状態ですか？');
   if (!ok) return;
   if (!navigator.onLine) {
-    setStatus('loadStatus', '初回ダウンロードにはインターネット接続が必要です。');
+    setStatus('loadStatus', '初回のモデル取得にはインターネット接続が必要です。');
     recordEvent('load_blocked_offline');
     return;
   }
+
+  activeOptimizerMode = getSelectedOptimizerMode();
+  loadAttempted = true;
+  const sessionOptions = makeSessionOptions();
+
   setBusy(true);
   $('progressBar').style.width = '0%';
   setStatus('loadStatus', '読み込みを開始します。アプリを閉じずに待ってください。');
   const loadStartedAt = performance.now();
-  recordEvent('model_load_requested', { cacheKey: CACHE_KEY, device: 'webgpu', dtype: DTYPE });
+  recordEvent('model_load_requested', {
+    cacheKey: CACHE_KEY,
+    device: 'webgpu',
+    dtype: DTYPE,
+    optimizerMode: activeOptimizerMode,
+    sessionOptions,
+  });
   try {
     const { pipeline } = await getTransformers();
     setStage('model_download_and_session_initialization');
@@ -324,24 +397,39 @@ $('loadBtn').addEventListener('click', async () => {
       device: 'webgpu',
       dtype: DTYPE,
       progress_callback: progressMessage,
+      session_options: sessionOptions,
     };
     recordEvent('pipeline_create_start', {
       device: options.device,
       dtype: options.dtype,
-      optimizerOverride: false,
+      optimizerMode: activeOptimizerMode,
+      sessionOptions: options.session_options,
+      onnxruntimeWebVersion: getOnnxRuntimeWebVersion(),
     });
     generator = await pipeline('text-generation', MODEL_ID, options);
     const seconds = ((performance.now() - loadStartedAt) / 1000).toFixed(1);
     $('progressBar').style.width = '100%';
     setStatus('loadStatus', `読み込み成功！ 所要時間 ${seconds}秒。推論はこの端末のWebGPUで実行します。`);
     $('generateBtn').disabled = false;
-    recordEvent('pipeline_create_success', { elapsedSeconds: Number(seconds) });
+    recordEvent('pipeline_create_success', {
+      elapsedSeconds: Number(seconds),
+      optimizerMode: activeOptimizerMode,
+      onnxruntimeWebVersion: getOnnxRuntimeWebVersion(),
+    });
     await updateCacheStatus();
   } catch (error) {
     generator = null;
     const details = errorDetails(error);
-    setStatus('loadStatus', `読み込みに失敗：${details.name}: ${details.message}\n連続で再試行せず、診断ログを保存して共有してください。`);
-    recordEvent('pipeline_create_error', { ...details, elapsedSeconds: Number(((performance.now() - loadStartedAt) / 1000).toFixed(1)) });
+    setStatus(
+      'loadStatus',
+      `読み込みに失敗：${details.name}: ${details.message}\nこのページ内では再試行しません。診断ログを保存してください。別条件を試す場合はページを再読み込みして条件を切り替えます。`
+    );
+    recordEvent('pipeline_create_error', {
+      ...details,
+      optimizerMode: activeOptimizerMode,
+      onnxruntimeWebVersion: getOnnxRuntimeWebVersion(),
+      elapsedSeconds: Number(((performance.now() - loadStartedAt) / 1000).toFixed(1)),
+    });
   } finally {
     setBusy(false);
   }

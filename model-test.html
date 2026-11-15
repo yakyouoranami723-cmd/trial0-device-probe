@@ -7,7 +7,7 @@
   <meta name="description" content="Trial Zero local model runtime test. Inference runs on this device.">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <title>Trial Zero — 0.5B Model Test</title>
+  <title>Trial Zero — 0.5B Model Test v0.2.2</title>
   <style>
     :root { color-scheme:dark; --bg:#0b0c10; --panel:#151720; --line:#303342; --pink:#ff7eb3; --text:#f5f6fa; --muted:#a7abba; --ok:#72d6a0; --warn:#ffd27a; --bad:#ff8b91; }
     * { box-sizing:border-box; }
@@ -25,6 +25,8 @@
     button.secondary { background:#202330; border-color:#44485a; }
     button:disabled { opacity:.45; }
     textarea { width:100%; min-height:100px; padding:12px; border-radius:11px; border:1px solid #44485a; background:#10121a; color:var(--text); font:inherit; resize:vertical; }
+    select { width:100%; padding:12px; border-radius:11px; border:1px solid #44485a; background:#10121a; color:var(--text); font:inherit; }
+    select:disabled { opacity:.65; }
     .status { min-height:24px; margin-top:10px; color:var(--muted); font-size:14px; overflow-wrap:anywhere; }
     .bar { height:10px; background:#303342; border-radius:99px; overflow:hidden; margin:10px 0 5px; }
     .bar > div { height:100%; width:0%; background:linear-gradient(90deg,#ff7eb3,#b77bff); transition:width .2s; }
@@ -41,7 +43,7 @@
 <body>
 <main>
   <div class="brand">TRIAL ZERO / LOCAL INFERENCE TEST</div>
-  <h1>0.5Bモデル<br>実機動作試験 v0.2.1</h1>
+  <h1>0.5Bモデル<br>実機動作試験 v0.2.2</h1>
   <p class="lead">iPhone内で小型AIモデルを読み込み、日本語の短い返答を生成できるか確認します。</p>
 
   <div class="notice"><strong>この試験では約483MBのモデル本体をダウンロードします。</strong><br>初回はWi-Fi接続と十分な充電を推奨します。モデル以外にTokenizer・設定ファイル・実行用ファイルも取得するため、合計通信量は483MBを超えます。モデルの読み込み中はアプリを閉じず、画面を開いたままにしてください。</div>
@@ -71,9 +73,15 @@
 
   <section class="panel">
     <h2>今回の読み込み条件</h2>
-    <p><strong>WebGPU / q4f16 / ONNX Runtime標準設定</strong></p>
-    <p class="muted">今回は追加の最適化器設定を指定せず、標準条件で読み込みを記録します。ConstantFoldingを無効化する案は過去の仮説として保留します。現在のONNX Runtime JavaScript資料では session_options.extra はWebAssemblyバックエンド向けとされているため、このWebGPU試験で有効と見なせないためです。</p>
-    <p class="muted">まず標準条件で、ファイル取得とセッション初期化のどこまで進むかを記録します。設定を複数同時に変えず、原因を切り分けます。</p>
+    <p><strong>WebGPU / q4f16 / 同じモデルキャッシュを使用</strong></p>
+    <label for="optimizerMode"><strong>読み込み設定</strong></label>
+    <select id="optimizerMode">
+      <option value="disable-constant-folding" selected>実験：ConstantFoldingを無効化</option>
+      <option value="standard">標準：追加設定なし</option>
+    </select>
+    <div id="optimizerDescription" class="status" role="status" aria-live="polite"></div>
+    <p class="muted">実験設定は、Transformers.jsからONNX Runtimeへ <code>session_options.extra</code> を渡すものです。ONNX Runtime公式API資料ではextraはWebAssembly向けと記載されていますが、Issue #33793では別の共有埋め込みモデルでWebGPU上の改善例が報告されています。Qwen2.5-0.5BのONNXグラフで同じ処理が起きているかは未確認で、実験の成功も設定が有効に働いた証明にはなりません。</p>
+    <p class="muted">1ページにつきモデル読み込みは1回だけです。別条件を試す場合はページを再読み込みし、条件を選び直してください。モデルキャッシュ識別子は従来と同じため、保存済みファイルが残っていれば再取得を減らせます。</p>
   </section>
 
   <section class="panel">
@@ -119,7 +127,7 @@
   </section>
 
   <p><a href="./">← 端末診断へ戻る</a></p>
-  <footer>Trial Zero / Model Probe v0.2.1 · Transformers.js 4.3.2 · Qwen2.5-0.5B-Instruct · No Firebase · No inference API</footer>
+  <footer>Trial Zero / Model Probe v0.2.2 · Transformers.js 4.3.2 · Qwen2.5-0.5B-Instruct · No Firebase · No inference API</footer>
 </main>
 <script type="module" src="./model-test.js"></script>
 </body>
