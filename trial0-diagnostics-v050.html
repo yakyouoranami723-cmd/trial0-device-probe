@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0c10">
+<title>Trial Zero — Cache & WebGPU Check v0.5.0</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0c10;--panel:#151720;--line:#303342;--pink:#ff7eb3;--text:#f5f6fa;--muted:#a7abba}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,sans-serif;padding:env(safe-area-inset-top) 15px env(safe-area-inset-bottom)}
+main{max-width:760px;margin:auto;padding:24px 0 44px}.brand{color:var(--pink);font-size:12px;font-weight:800;letter-spacing:.12em}
+h1{font-size:clamp(24px,6vw,32px);line-height:1.2;margin:8px 0}h2{font-size:17px;margin:0 0 10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:13px 0}
+.notice{border-color:#6c4760;background:#241725}.muted{color:var(--muted)}
+button{width:100%;min-height:50px;border:1px solid #8e5276;border-radius:11px;background:#6e3155;color:white;font:700 16px system-ui;padding:12px;margin:6px 0}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#10121a;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12px;max-height:55vh;overflow:auto}
+.status{min-height:28px;color:#ffd0e4;overflow-wrap:anywhere}
+</style></head>
+<body><main>
+<div class="brand">TRIAL ZERO / NON-DESTRUCTIVE DIAGNOSTICS</div>
+<h1>キャッシュ・WebGPU確認 v0.5.0</h1>
+<section class="panel notice">
+<strong>安全確認ページ</strong>
+<p>このページはモデルをダウンロードせず、モデルを初期化せず、推論もしません。Transformers.jsのModelRegistry APIでキャッシュ状態を確認し、WebGPUアダプター情報とブラウザー保存容量を読み取るだけです。</p>
+<p>前回のQwen起動試験は再実行しません。既存キャッシュを削除・変更する操作もありません。</p>
+</section>
+<section class="panel"><h2>診断</h2><button id="check">キャッシュと環境を確認</button><div id="status" class="status">まだ確認していません。</div></section>
+<section class="panel"><h2>結果</h2><pre id="out">ここに結果が表示されます。</pre><button id="copy">結果をコピー</button></section>
+</main>
+<script type="module">
+'use strict';
+const MODEL='onnx-community/Qwen2.5-0.5B-Instruct';
+const CACHE_KEY='trial0-transformers-qwen25-05b-v01';
+const $=id=>document.getElementById(id);
+let result={version:'0.5.0-cache-webgpu-check',startedAt:null,model:MODEL,cacheKey:CACHE_KEY};
+const show=()=>{$('out').textContent=JSON.stringify(result,null,2)};
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(result,null,2));$('status').textContent='コピーしました。';}catch{$('status').textContent='コピーできません。結果欄をそのまま共有してください。';}});
+$('check').addEventListener('click',async()=>{
+ $('check').disabled=true;$('status').textContent='環境情報を確認中…';
+ result={version:'0.5.0-cache-webgpu-check',startedAt:new Date().toISOString(),model:MODEL,cacheKey:CACHE_KEY,warning:'No model pipeline was loaded; no model file was requested.'};
+ try{
+  result.browser={online:navigator.onLine,userAgent:navigator.userAgent,hardwareConcurrency:navigator.hardwareConcurrency||null,deviceMemory:navigator.deviceMemory??null,crossOriginIsolated,sharedArrayBuffer:typeof SharedArrayBuffer!=='undefined',wasmJSPI:typeof WebAssembly.Suspending==='function'};
+  if(typeof navigator.storage?.estimate==='function'){try{const s=await navigator.storage.estimate();result.storage={usageBytes:s.usage??null,quotaBytes:s.quota??null,usageDetails:s.usageDetails??null};}catch(e){result.storageError=String(e)}}
+  if(typeof navigator.gpu!=='undefined'){
+   try{const a=await navigator.gpu.requestAdapter();if(a){const f=Array.from(a.features||[]).sort();const l=a.limits||{};result.webgpu={adapterAvailable:true,features:f,limits:{maxBufferSize:l.maxBufferSize??null,maxStorageBufferBindingSize:l.maxStorageBufferBindingSize??null,maxComputeWorkgroupStorageSize:l.maxComputeWorkgroupStorageSize??null,maxComputeInvocationsPerWorkgroup:l.maxComputeInvocationsPerWorkgroup??null},info:a.info?{vendor:a.info.vendor,architecture:a.info.architecture,device:a.info.device,description:a.info.description}:null};}else result.webgpu={adapterAvailable:false};}catch(e){result.webgpuError={name:e?.name,message:e?.message};}
+  }else result.webgpu={apiAvailable:false};
+  $('status').textContent='Transformers.jsのキャッシュ情報を確認中…';show();
+  const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+  m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=CACHE_KEY;m.env.allowRemoteModels=true;
+  result.transformers={version:m.env?.version??'unknown',hasGetPipelineFiles:typeof m.ModelRegistry?.get_pipeline_files==='function',hasIsPipelineCached:typeof m.ModelRegistry?.is_pipeline_cached==='function',hasGetFileMetadata:typeof m.ModelRegistry?.get_file_metadata==='function'};
+  if(typeof m.ModelRegistry?.get_pipeline_files==='function'){
+   try{const files=await m.ModelRegistry.get_pipeline_files('text-generation',MODEL,{device:'webgpu',dtype:'q4f16'});result.requiredFiles=files;
+    if(typeof m.ModelRegistry.get_file_metadata==='function'){result.fileMetadata=await Promise.all(files.map(async file=>{try{const x=await m.ModelRegistry.get_file_metadata(MODEL,file);return{file,size:x?.size??null};}catch(e){return{file,error:String(e)}}}));}
+   }catch(e){result.fileListError={name:e?.name,message:e?.message};}
+  }
+  if(typeof m.ModelRegistry?.is_pipeline_cached==='function'){
+   try{result.pipelineCache=await m.ModelRegistry.is_pipeline_cached('text-generation',MODEL,{device:'webgpu',dtype:'q4f16'});}catch(e){result.pipelineCacheError={name:e?.name,message:e?.message};}
+  }
+  try{if(typeof caches!=='undefined')result.cacheStorageNames=await caches.keys();}catch(e){result.cacheStorageError=String(e);}
+  result.completedAt=new Date().toISOString();result.status='complete';
+  $('status').textContent='確認完了。モデルの読み込み・生成は行っていません。';
+ }catch(e){result.status='diagnostic_error';result.error={name:e?.name,message:e?.message,stack:typeof e?.stack==='string'?e.stack.split('\n').slice(0,6).join('\n'):null};$('status').textContent='診断中のエラー：'+(e?.message||e);}
+ show();$('check').disabled=false;
+});
+show();
+</script></body></html>
