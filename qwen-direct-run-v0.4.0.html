@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0c10">
+<title>Trial Zero — Qwen Direct Run v0.4.0</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0c10;--panel:#151720;--line:#303342;--pink:#ff7eb3;--text:#f5f6fa;--muted:#a7abba}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,sans-serif;padding:env(safe-area-inset-top) 15px env(safe-area-inset-bottom)}
+main{max-width:760px;margin:auto;padding:24px 0 44px}.brand{color:var(--pink);font-size:12px;font-weight:800;letter-spacing:.12em}
+h1{font-size:clamp(24px,6vw,32px);line-height:1.2;margin:8px 0}h2{font-size:17px;margin:0 0 10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:13px 0}
+.notice{border-color:#6c4760;background:#241725}.muted{color:var(--muted)}
+button{width:100%;min-height:50px;border:1px solid #8e5276;border-radius:11px;background:#6e3155;color:white;font:700 16px system-ui;padding:12px;margin:6px 0}
+button.secondary{background:#202330;border-color:#44485a}button:disabled{opacity:.45}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#10121a;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12px;max-height:440px;overflow:auto}
+.status{min-height:28px;color:#ffd0e4;overflow-wrap:anywhere}.small{font-size:12px}
+</style>
+</head>
+<body><main>
+<div class="brand">TRIAL ZERO / DIRECT MODEL RUN</div>
+<h1>Qwen実機起動・短文生成 v0.4.0</h1>
+<p class="muted">診断用のWASM/GPU計測ラッパーを外し、Transformers.jsの標準APIでモデル読み込みから短文生成までを一度だけ確認します。</p>
+<section class="panel notice">
+<strong>今回の修正点</strong>
+<p>前回と同じQwen2.5-0.5B-Instruct・q4f16・WebGPU・Transformers.js 4.3.2を使用します。モデルキャッシュ識別子も既存試験と同じにして、取得済みファイルの再利用を狙います。</p>
+<p>前回の <code>session_options.extra</code> はONNX Runtime Webの公式API資料でWASMバックエンド専用とされているため、今回のWebGPU試験から外しました。ConstantFolding無効化がWebGPUで効くとは扱いません。</p>
+<p>監視ラッパー・GPU計測・大量ログ描画は行いません。生成は短文1回だけです。</p>
+<p class="small muted">このページ版は一度だけ実行します。白くなる・Safariが閉じる場合は再試行せず、再度ページを開いて保存ログを確認してください。</p>
+</section>
+<section class="panel">
+<h2>実行</h2>
+<button id="run">Qwenを起動して短文を1回生成</button>
+<div id="status" class="status">まだ実行していません。</div>
+</section>
+<section class="panel">
+<h2>結果・保存ログ</h2>
+<pre id="output">実行結果がここに表示されます。</pre>
+<button id="refresh" class="secondary">保存済みログを再表示</button>
+<button id="copy" class="secondary" disabled>結果をコピー</button>
+</section>
+</main>
+<script type="module">
+'use strict';
+const VERSION='0.4.0-direct-qwen-run';
+const MODEL='onnx-community/Qwen2.5-0.5B-Instruct';
+const DTYPE='q4f16', DEVICE='webgpu', TRANSFORMERS_VERSION='4.3.2';
+const CACHE_KEY='trial0-transformers-qwen25-05b-v01';
+const ATTEMPT_KEY='trial0-qwen-direct-run-attempt-v040';
+const LOG_KEY='trial0-qwen-direct-run-log-v040';
+const $=id=>document.getElementById(id);
+let report={app:'Trial Zero Qwen Direct Run',version:VERSION,status:'not_started'},events=[],busy=false;
+function render(){$('output').textContent=JSON.stringify({report,events},null,2);}
+function save(type,details={}){
+ events.push({at:new Date().toISOString(),type,...details});events=events.slice(-50);
+ try{localStorage.setItem(LOG_KEY,JSON.stringify({report,events}));}catch{}
+ render();
+}
+function restore(){try{const x=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(x){report=x.report||report;events=Array.isArray(x.events)?x.events:[];}}catch{}render();}
+function errorInfo(e){return{name:String(e?.name||'Error'),message:String(e?.message||e||'Unknown error').slice(0,1400),stack:typeof e?.stack==='string'?e.stack.split('\n').slice(0,7).join('\n'):null};}
+restore();
+if(localStorage.getItem(ATTEMPT_KEY)){$('run').disabled=true;$('status').textContent='このページ版は既に試行済みです。保存ログの確認のみ行えます。';}
+$('refresh').addEventListener('click',()=>{restore();$('status').textContent='保存済みログを再表示しました。';});
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({report,events},null,2));$('status').textContent='結果をコピーしました。';}catch{$('status').textContent='コピーできませんでした。画面のJSONを確認してください。';}});
+$('run').addEventListener('click',async()=>{
+ if(busy||localStorage.getItem(ATTEMPT_KEY))return;
+ busy=true;localStorage.setItem(ATTEMPT_KEY,new Date().toISOString());$('run').disabled=true;
+ report={app:'Trial Zero Qwen Direct Run',version:VERSION,startedAt:new Date().toISOString(),model:MODEL,dtype:DTYPE,device:DEVICE,transformersJs:TRANSFORMERS_VERSION,cacheKey:CACHE_KEY,status:'starting',generationAttempted:false};
+ events=[];save('run_started',{online:navigator.onLine,webgpuAvailable:Boolean(navigator.gpu),hardwareConcurrency:navigator.hardwareConcurrency||null});
+ try{
+  if(!navigator.gpu)throw new Error('WebGPU APIが利用できません。');
+  if(!navigator.onLine)throw new Error('初期化に必要なインターネット接続がありません。');
+  $('status').textContent='Transformers.jsを読み込み中…';save('runtime_import_started');
+  const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+  m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=CACHE_KEY;m.env.allowRemoteModels=true;
+  save('runtime_import_done',{runtimeVersion:m.env?.version||TRANSFORMERS_VERSION,ortVersion:m.env?.backends?.onnx?.versions?.web||null});
+  try{
+   if(typeof m.ModelRegistry?.is_pipeline_cached_files==='function'){
+    const cache=await m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+    report.cacheBeforeLoad=cache;save('cache_checked',{allCached:cache?.allCached??null,files:cache?.files||null});
+   }
+  }catch(e){save('cache_check_unavailable',{error:errorInfo(e)});}
+  $('status').textContent='Qwenを初期化中… Safariを前面に保ってください。';
+  const marks=new Map();
+  const generator=await m.pipeline('text-generation',MODEL,{
+   device:DEVICE,dtype:DTYPE,
+   progress_callback(info){
+    if(!info||typeof info!=='object')return;
+    const file=info.file?String(info.file).split('/').pop():null,p=Number.isFinite(info.progress)?Math.max(0,Math.min(100,info.progress)):null,status=String(info.status||'');
+    if(status==='initiate'||status==='done'||status==='ready')save('model_file_event',{status,file});
+    if(p!==null){
+     const key=file||'overall',mark=Math.floor(p/10)*10,prev=marks.get(key)??-10;
+     if(mark>=prev+10||p>=99.9){marks.set(key,mark);save('model_progress',{file,progress:Math.round(p*10)/10,loaded:Number.isFinite(info.loaded)?info.loaded:null,total:Number.isFinite(info.total)?info.total:null});}
+     $('status').textContent='モデル準備中：'+(file?file+' · ':'')+p.toFixed(1)+'%';
+    }
+   }
+  });
+  window.__trial0QwenGenerator=generator;report.status='model_loaded';save('pipeline_ready');
+  $('status').textContent='モデル初期化成功。短い日本語文を生成中…';report.generationAttempted=true;
+  const result=await generator([{role:'user',content:'こんにちは。短く自己紹介してください。'}],{max_new_tokens:32,do_sample:false});
+  const generated=result?.[0]?.generated_text;let answer=null;
+  if(Array.isArray(generated)){const last=generated[generated.length-1];answer=typeof last?.content==='string'?last.content:JSON.stringify(last);}
+  else if(typeof generated==='string')answer=generated;else answer=JSON.stringify(result);
+  report.status='success';report.answer=answer;save('generation_success',{answer});
+  $('status').textContent='成功！Qwenの起動と短文生成が完了しました。';
+ }catch(e){
+  report.status='error';report.error=errorInfo(e);save('run_error',{error:report.error,generationAttempted:report.generationAttempted});
+  $('status').textContent='失敗：'+report.error.name+' — '+report.error.message;
+ }finally{report.completedAt=new Date().toISOString();busy=false;render();$('copy').disabled=false;}
+});
+window.addEventListener('pagehide',()=>save('pagehide',{status:report.status}));
+</script>
+</body></html>
