@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c10">
+  <title>Trial Zero — Read-only Diagnostics v0.2.6</title>
+  <style>
+    :root { color-scheme:dark; --bg:#0b0c10; --panel:#151720; --line:#303342; --pink:#ff7eb3; --text:#f5f6fa; --muted:#a7abba; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font:15px/1.55 system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif; padding:env(safe-area-inset-top) 15px env(safe-area-inset-bottom); }
+    main { max-width:850px; margin:0 auto; padding:24px 0 44px; }
+    .brand { color:var(--pink); font-size:12px; font-weight:800; letter-spacing:.12em; }
+    h1 { font-size:clamp(25px,6vw,34px); margin:8px 0; line-height:1.2; }
+    h2 { font-size:17px; margin:0 0 10px; }
+    .muted { color:var(--muted); }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:15px; padding:15px; margin:13px 0; }
+    .notice { border-color:#6c4760; background:#241725; }
+    button { width:100%; min-height:48px; border:1px solid #8e5276; border-radius:11px; background:#6e3155; color:white; font:700 15px system-ui; padding:12px; margin:5px 0; }
+    button.secondary { background:#202330; border-color:#44485a; }
+    button:disabled { opacity:.55; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#10121a; border:1px solid var(--line); border-radius:10px; padding:12px; font-size:12px; max-height:480px; overflow:auto; }
+    .status { min-height:24px; color:var(--muted); overflow-wrap:anywhere; }
+    code { color:#ffd0e4; overflow-wrap:anywhere; }
+    footer { color:var(--muted); font-size:12px; margin-top:20px; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">TRIAL ZERO / READ-ONLY DEVICE CHECK</div>
+  <h1>追加診断 v0.2.6</h1>
+  <p class="muted">モデルを読み込まず、現在の端末環境・既存キャッシュ・Service Worker・保存済み診断ログだけを確認します。</p>
+  <section class="panel notice">
+    <strong>モデルの読み込み・推論は行いません。</strong>
+    <p class="muted">モデルキャッシュの削除や変更・Service Worker更新・ストレージ永続化要求は行いません。Cache StorageのResponse本文は読みません。ランタイム情報ボタンはTransformers.jsのJavaScriptモジュールを読み込みます。既存Service Workerのルールにより、そのライブラリJSがランタイム用キャッシュへ追加される場合があります。モデル本体やInferenceSessionは読み込みません。</p>
+  </section>
+  <section class="panel">
+    <h2>1. 診断</h2>
+    <button id="runBtn">端末・キャッシュ・過去ログを確認</button>
+    <button id="runtimeBtn" class="secondary" disabled>Transformers.js / ONNX Runtimeの設定も確認</button>
+    <div id="status" class="status">診断を開始します…</div>
+  </section>
+  <section class="panel">
+    <h2>2. 結果</h2>
+    <pre id="output">診断結果を取得中です。</pre>
+    <button id="downloadBtn" class="secondary" disabled>診断結果をJSON保存</button>
+    <button id="copyBtn" class="secondary" disabled>診断結果をコピー</button>
+  </section>
+  <section class="panel">
+    <h2>共有前の確認</h2>
+    <p class="muted">JSONにはUser-Agent、端末機能情報、キャッシュ内ファイル名とURL（クエリ文字列を除去）、保存済みモデル診断ログが含まれます。現在のmodel-test.jsは入力文や生成回答そのものを記録しない設計ですが、エラー情報などは含まれる可能性があるため、共有前にJSONを開いて確認してください。個人名・アカウント情報・写真は収集しません。</p>
+  </section>
+  <p><a href="./model-test.html" style="color:#ffc0dc">モデル試験ページへ戻る</a></p>
+  <footer>Trial Zero / Read-only Diagnostics v0.2.6 · No model load · No inference · No model-cache mutation</footer>
+</main>
+<script src="./readonly-diagnostics.js"></script>
+</body>
+</html>
