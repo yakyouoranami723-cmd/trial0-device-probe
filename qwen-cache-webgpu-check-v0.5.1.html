@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0c10">
+<title>Trial Zero — Cache & WebGPU Check v0.5.1</title>
+<style>
+:root{color-scheme:dark;--bg:#0b0c10;--panel:#151720;--line:#303342;--pink:#ff7eb3;--text:#f5f6fa;--muted:#a7abba}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 system-ui,-apple-system,sans-serif;padding:env(safe-area-inset-top) 15px env(safe-area-inset-bottom)}
+main{max-width:760px;margin:auto;padding:24px 0 44px}.brand{color:var(--pink);font-size:12px;font-weight:800;letter-spacing:.12em}
+h1{font-size:clamp(24px,6vw,32px);line-height:1.2;margin:8px 0}h2{font-size:17px;margin:0 0 10px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:13px 0}
+.notice{border-color:#6c4760;background:#241725}.muted{color:var(--muted)}
+button{width:100%;min-height:50px;border:1px solid #8e5276;border-radius:11px;background:#6e3155;color:white;font:700 16px system-ui;padding:12px;margin:6px 0}
+button.secondary{background:#202330;border-color:#44485a}button:disabled{opacity:.45}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#10121a;border:1px solid var(--line);border-radius:10px;padding:12px;font-size:12px;max-height:560px;overflow:auto}
+.status{min-height:28px;color:#ffd0e4;overflow-wrap:anywhere}.small{font-size:12px}
+</style>
+</head>
+<body><main>
+<div class="brand">TRIAL ZERO / DIAGNOSTICS</div>
+<h1>キャッシュ・WebGPU確認 v0.5.1</h1>
+<p class="muted">Qwenの再起動前に、前回のモデルファイルがブラウザー内に残っているか、SafariのWebGPU機能・上限値を確認します。</p>
+<section class="panel notice">
+<strong>安全のため、このページでは実行しません</strong>
+<ul>
+<li>Qwenモデルのダウンロード、パイプライン初期化、推論は行いません。</li>
+<li>キャッシュの削除・変更は行いません。</li>
+<li>WebGPUはアダプター情報を読むだけで、GPUデバイスやモデルを作成しません。</li>
+<li>診断のためTransformers.js本体（約数MB）がCDNから読み込まれる場合があります。Qwenの約483MBファイルは取得しない実装です。</li>
+</ul>
+<p class="small muted">前回と同じTransformers.js 4.3.2・モデルID・dtype・cacheKeyで、キャッシュ状態だけを確認します。前回と同じSafariでGitHub Pagesから開いてください（ローカルHTML・別ドメイン・PWAでは正しく比較できません）。</p>
+</section>
+<section class="panel">
+<h2>診断</h2>
+<button id="run">キャッシュとWebGPUを確認</button>
+<div id="status" class="status">まだ診断していません。</div>
+</section>
+<section class="panel">
+<h2>結果</h2>
+<pre id="output">診断結果はここに表示されます。</pre>
+<button id="copy" class="secondary" disabled>結果をコピー</button>
+</section>
+</main>
+<script type="module">
+'use strict';
+const MODEL='onnx-community/Qwen2.5-0.5B-Instruct';
+const DTYPE='q4f16';
+const DEVICE='webgpu';
+const TRANSFORMERS_VERSION='4.3.2';
+const CACHE_KEY='trial0-transformers-qwen25-05b-v01';
+const EXPECTED_ORIGIN='https://yakyouoranami723-cmd.github.io';
+const EXPECTED_PATH='/trial0-device-probe/';
+const $=id=>document.getElementById(id);
+let report=null;
+const correctOrigin=location.origin===EXPECTED_ORIGIN && location.pathname.startsWith(EXPECTED_PATH);
+if(!correctOrigin){
+ $('run').disabled=true;
+ $('status').textContent='この場所では診断できません。前回Qwenを起動したGitHub PagesのSafari画面から開いてください。現在のURL: '+location.href;
+}
+function render(){ $('output').textContent=report?JSON.stringify(report,null,2):'診断結果はここに表示されます。'; $('copy').disabled=!report; }
+function err(e){return {name:String(e?.name||'Error'),message:String(e?.message||e||'Unknown error').slice(0,1200)};}
+function selectedLimits(limits){
+ if(!limits)return null;
+ const names=['maxBufferSize','maxStorageBufferBindingSize','maxComputeWorkgroupStorageSize','maxComputeInvocationsPerWorkgroup','maxStorageBuffersPerShaderStage','maxComputeWorkgroupsPerDimension','maxBindGroups','maxTextureDimension2D'];
+ const out={}; for(const n of names){const v=limits[n];if(typeof v==='number')out[n]=v;} return out;
+}
+$('run').addEventListener('click',async()=>{
+ const button=$('run'); if(button.disabled)return; button.disabled=true;
+ report={version:'0.5.1-cache-webgpu-check',startedAt:new Date().toISOString(),pageOrigin:location.origin,pagePath:location.pathname,model:MODEL,dtype:DTYPE,device:DEVICE,transformersJs:TRANSFORMERS_VERSION,cacheKey:CACHE_KEY,modelLoadAttempted:false,generationAttempted:false};
+ render(); $('status').textContent='端末・ストレージ情報を確認中…';
+ try{
+  report.browser={userAgent:navigator.userAgent,online:navigator.onLine,hardwareConcurrency:navigator.hardwareConcurrency||null,deviceMemory:navigator.deviceMemory??null};
+  report.storage={available:!!navigator.storage};
+  if(navigator.storage?.estimate){try{const s=await navigator.storage.estimate();report.storage.usageBytes=s.usage??null;report.storage.quotaBytes=s.quota??null;}catch(e){report.storage.estimateError=err(e);}}
+  if(globalThis.caches?.keys){try{report.cacheStorageNames=await caches.keys();}catch(e){report.cacheStorageError=err(e);}}
+  $('status').textContent='WebGPUアダプター情報を確認中…';
+  report.webgpu={available:!!navigator.gpu};
+  if(navigator.gpu){
+   try{
+    const adapter=await navigator.gpu.requestAdapter();
+    report.webgpu.adapterAvailable=!!adapter;
+    if(adapter){
+     const info=adapter.info||{};
+     report.webgpu.adapterInfo={vendor:info.vendor||null,architecture:info.architecture||null,device:info.device||null,description:info.description||null};
+     report.webgpu.features=Array.from(adapter.features||[]);
+     report.webgpu.limits=selectedLimits(adapter.limits);
+    }
+   }catch(e){report.webgpu.adapterError=err(e);}
+  }
+  $('status').textContent='Transformers.jsのキャッシュ情報を確認中…';
+  try{
+   const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+   m.env.useBrowserCache=true;
+   m.env.useWasmCache=true;
+   m.env.cacheKey=CACHE_KEY;
+   m.env.allowRemoteModels=true;
+   report.transformersRuntime={imported:true,version:m.env?.version||TRANSFORMERS_VERSION,cacheCheckerAvailable:typeof m.ModelRegistry?.is_pipeline_cached_files==='function'};
+   if(typeof m.ModelRegistry?.is_pipeline_cached_files==='function'){
+    const cache=await m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+    report.modelCache=cache;
+   }else{
+    report.modelCache={checked:false,reason:'このTransformers.jsビルドでキャッシュ確認APIを利用できませんでした。'};
+   }
+  }catch(e){report.transformersRuntime={imported:false,error:err(e)};}
+  report.completedAt=new Date().toISOString();
+  $('status').textContent='診断が完了しました。結果のJSONをコピーして送ってください。';
+ }catch(e){report.fatalError=err(e);report.completedAt=new Date().toISOString();$('status').textContent='診断中にエラーが発生しました。結果を確認してください。';}
+ render();
+});
+$('copy').addEventListener('click',async()=>{
+ try{await navigator.clipboard.writeText(JSON.stringify(report,null,2));$('status').textContent='結果をコピーしました。';}
+ catch(e){$('status').textContent='自動コピーできませんでした。画面のJSONを長押ししてコピーしてください。';}
+});
+</script>
+</body></html>
