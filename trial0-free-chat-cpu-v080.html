@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d1721">
+<title>Trial Zero — Free Chat CPU Test v0.8.0</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1721;--panel:#172433;--border:#345166;--text:#eef6f9;--muted:#b5ccd3;--teal:#76dec7;--amber:#ffdc97;--input:#111d2c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:720px;margin:22px auto 44px}.eyebrow{color:var(--teal);font-size:12px;font-weight:800;letter-spacing:.1em}
+h1{font-size:clamp(24px,6vw,31px);line-height:1.25;margin:7px 0 11px}h2{font-size:17px;margin:0 0 12px}
+.sub{color:var(--muted)}.small{font-size:12px;line-height:1.55}.panel{background:var(--panel);border:1px solid var(--border);border-radius:15px;padding:15px;margin:13px 0}
+.warning{background:#29281e;border-color:#80704d}.status{color:var(--amber);min-height:25px;margin-top:9px;overflow-wrap:anywhere}
+button{width:100%;min-height:48px;margin:6px 0;padding:12px 14px;border:1px solid #70c7b6;border-radius:11px;background:#17675c;color:white;font:700 15px system-ui;cursor:pointer}
+button.secondary{background:#293d50;border-color:#58758a}button.danger{background:#553d42;border-color:#8c6470}button:disabled{opacity:.42;cursor:default}
+textarea{width:100%;resize:vertical;min-height:90px;max-height:200px;background:var(--input);color:var(--text);border:1px solid #69899a;border-radius:11px;font:16px/1.5 system-ui;padding:12px}textarea:disabled{opacity:.53}
+.row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}.row>span{color:var(--muted)}
+.chatarea{max-height:480px;min-height:150px;overflow:auto;overscroll-behavior:contain;border-radius:10px;background:#101b28;border:1px solid #31485c;padding:13px}
+.placeholder{color:var(--muted);text-align:center;margin:40px 0}.bubble{border-radius:11px;padding:11px 13px;margin:9px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.user{background:#30445a;margin-left:29px}.assistant{background:#17413c;margin-right:29px}.tag{display:block;font-size:11px;letter-spacing:.08em;color:#c7e4e6;font-weight:800;margin-bottom:4px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:420px;overflow:auto;background:#101b28;border:1px solid #31485c;border-radius:10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;padding:12px}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO / LOCAL CHAT TEST</div>
+<h1>自由入力チャット検証 v0.8.0</h1>
+<p class="sub">実機で文章生成に成功した <strong>SmolLM2-135M / q4f16 / CPU(WASM)</strong> を変更せず、入力した質問への返答と短い会話履歴を試します。</p>
+<section class="panel warning"><h2>この検証の制限</h2>
+<p>今回は<strong>最大4往復・1入力120文字まで・1回答最大24トークン</strong>。英語の短文から試すのがおすすめです。モデルは小さく、不正確・不自然な回答が出る場合があります。</p>
+<p class="small">保存済み117MBモデルが確認できた場合にだけ起動。モデルの外部再取得を遮断する設計です。Transformers.js本体・WASM関連ファイルのCDN通信は発生する場合があります。<strong>完全オフライン検証ではありません。</strong></p>
+<p class="small">会話文は画面を閉じると消えます。診断用の状態・時刻・処理時間のみ同じサイトのlocalStorageに保存します。「記録をコピー」のJSONには会話文を含むため、共有前に確認してください。<strong>氏名・住所・パスワードなどは入力しないでください。</strong></p>
+</section>
+<section class="panel"><h2>① 準備</h2>
+<button id="check">保存済みモデルのキャッシュを確認</button>
+<button id="load" disabled>CPU/WASMでAIを起動（この版は1回限り）</button>
+<div id="status" class="status" role="status" aria-live="polite">まだ確認していません。</div>
+</section>
+<section class="panel"><h2>② 自由入力チャット</h2>
+<div class="row"><span class="small">このページ内だけの会話履歴</span><span id="count" class="small">0 / 4 往復</span></div>
+<div id="chat" class="chatarea" aria-label="会話表示"><p class="placeholder">AIを起動すると会話できます。</p></div>
+<label for="prompt" class="small sub">入力（最大120文字、まずは短い英語で）</label>
+<textarea id="prompt" maxlength="120" rows="3" disabled placeholder="例: Hello! Please introduce yourself briefly."></textarea>
+<div class="row"><span id="characters" class="small">0 / 120文字</span><span class="small">短い内容で試してね</span></div>
+<button id="send" disabled>メッセージを送って回答を生成</button>
+<button id="stop" class="secondary" disabled>会話を終了してAIのメモリを解放</button>
+<p class="small sub">送信中は次の操作を受け付けません。途中で画面を離れた場合は再実行せず、保存済み診断ログを確認してください。</p>
+</section>
+<section class="panel"><h2>③ 診断記録</h2>
+<button id="copy" class="secondary">JSON記録をコピー（現在の会話文を含む）</button>
+<button id="clear" class="danger">この検証の診断記録を削除</button>
+<pre id="output">記録はここに表示されます。</pre>
+<p class="small sub">診断記録を削除してもモデルキャッシュは削除しません。誤再実行防止のロックは残ります。</p>
+</section>
+</main>
+<script type="module">
+'use strict';
+const VERSION='v0.8.0-free-chat-wasm';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX';
+const DEVICE='wasm',DTYPE='q4f16',LIB_VERSION='4.3.2';
+const MODEL_CACHE='trial0-smollm135-v060';
+const ORIGIN='https://yakyouoranami723-cmd.github.io',ROOT='/trial0-device-probe/';
+const ATTEMPT_KEY='trial0-free-chat-v080-started', LOG_KEY='trial0-free-chat-v080-diagnostics';
+const MAX_TURNS=4,MAX_INPUT=120,MAX_NEW_TOKENS=24;
+const $=id=>document.getElementById(id);
+const validSite=location.origin===ORIGIN&&location.pathname.startsWith(ROOT);
+let state='idle',busy=false,checked=false,model=null,library=null,history=[],transcript=[],events=[];
+let report={version:VERSION,status:'idle'};
+function say(message){$('status').textContent=message;}
+function diagnostic(){return {report,events};}
+function exportData(){return {report,events,transcript};}
+function renderLog(){$('output').textContent=JSON.stringify(diagnostic(),null,2);}
+function persist(){try{localStorage.setItem(LOG_KEY,JSON.stringify(diagnostic()));}catch{}renderLog();}
+function event(name,details={}){events.push({at:new Date().toISOString(),name,...details});events=events.slice(-60);persist();}
+function errorInfo(e){return {name:String(e?.name||'Error'),message:String(e?.message||e||'unknown').slice(0,1400),stack:typeof e?.stack==='string'?e.stack.split('\n').slice(0,4).join('\n'):null};}
+function refresh(){
+ const locked=!!localStorage.getItem(ATTEMPT_KEY);
+ $('check').disabled=!validSite||busy||locked||!!model;
+ $('load').disabled=!validSite||busy||!checked||locked||!!model;
+ $('prompt').disabled=busy||state!=='ready';
+ $('send').disabled=busy||state!=='ready'||!$('prompt').value.trim()||transcript.filter(t=>t.role==='user').length>=MAX_TURNS;
+ $('stop').disabled=busy||!model;
+ $('clear').disabled=busy||!!model;
+ $('characters').textContent=$('prompt').value.length+' / '+MAX_INPUT+'文字';
+ $('count').textContent=transcript.filter(t=>t.role==='user').length+' / '+MAX_TURNS+' 往復';
+}
+function showChat(){
+ const chat=$('chat');chat.textContent='';
+ if(!transcript.length){const p=document.createElement('p');p.className='placeholder';p.textContent=state==='ready'?'短いメッセージを入力して送信してください。':'AIを起動すると会話できます。';chat.appendChild(p);return;}
+ for(const m of transcript){
+  const bubble=document.createElement('div');bubble.className='bubble '+(m.role==='user'?'user':'assistant');
+  const tag=document.createElement('span');tag.className='tag';tag.textContent=m.role==='user'?'YOU':'AI';
+  bubble.appendChild(tag);bubble.appendChild(document.createTextNode(m.content||'(空文字)'));chat.appendChild(bubble);
+ }
+ chat.scrollTop=chat.scrollHeight;
+}
+function restore(){
+ try{const saved=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(saved){report=saved.report||report;events=Array.isArray(saved.events)?saved.events:[];}}catch{}
+ renderLog();
+ if(localStorage.getItem(ATTEMPT_KEY)){
+  state='locked';say('この版は起動済みです。再読み込みではAIと会話履歴を復元できません。保存済み診断ログを確認してください。');
+ }
+}
+if(!validSite){report={version:VERSION,status:'wrong_origin',origin:location.origin,path:location.pathname};say('正しいGitHub PagesのSafari画面から開いてください。');renderLog();}else restore();
+showChat();refresh();
+async function runtime(){
+ if(library)return library;
+ const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+ m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=MODEL_CACHE;
+ m.env.allowLocalModels=false;m.env.allowRemoteModels=true;
+ if(m.env.backends?.onnx?.wasm)m.env.backends.onnx.wasm.numThreads=1;
+ const nativeFetch=globalThis.fetch.bind(globalThis);
+ m.env.fetch=async(input,init)=>{
+  const raw=typeof input==='string'?input:(input?.url||String(input));
+  let url;try{url=new URL(raw,location.href);}catch{throw new Error('不正な取得URLを遮断しました。');}
+  if(url.origin!==location.origin&&url.hostname!=='cdn.jsdelivr.net'){
+   report.blockedRequests=(report.blockedRequests||[]).slice(-5).concat([{at:new Date().toISOString(),host:url.hostname,path:url.pathname.slice(0,90)}]);
+   persist();throw new Error('外部モデルの取得を遮断しました: '+url.hostname);
+  }
+  return nativeFetch(input,init);
+ };
+ library=m;return m;
+}
+async function cacheStatus(m){
+ if(typeof m.ModelRegistry?.is_pipeline_cached_files!=='function')throw new Error('キャッシュ確認APIがありません。');
+ return m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+}
+function answerFrom(output){
+ const result=output?.[0]?.generated_text;
+ if(Array.isArray(result)){
+  const last=result.at(-1);
+  return last?.role==='assistant'&&typeof last.content==='string'?last.content:'';
+ }
+ return typeof result==='string'?result:'';
+}
+async function release(){
+ const g=model;model=null;
+ if(g){try{await g.dispose?.();event('pipeline_disposed');}catch(e){event('dispose_error',{error:errorInfo(e)});}}
+}
+async function finish(message,status){
+ state='finished';report.status=status;report.completedAt=new Date().toISOString();
+ event('session_finished',{status});say(message);await release();
+}
+$('prompt').addEventListener('input',refresh);
+$('check').addEventListener('click',async()=>{
+ if(!validSite||busy||localStorage.getItem(ATTEMPT_KEY))return;
+ busy=true;refresh();report={version:VERSION,status:'checking_cache',startedAt:new Date().toISOString(),model:MODEL,device:DEVICE,dtype:DTYPE,cacheKey:MODEL_CACHE,modelReDownloadAttempted:false,maxTurns:MAX_TURNS,maxNewTokens:MAX_NEW_TOKENS};events=[];persist();
+ try{
+  say('モデルキャッシュを確認中…');const m=await runtime();report.runtimeVersion=m.env.version||LIB_VERSION;
+  report.cache=await cacheStatus(m);checked=report.cache?.allCached===true;report.status=checked?'cache_ready':'cache_missing';event('cache_checked',{allCached:checked});
+  say(checked?'保存済みモデルを確認。続いて「AIを起動」を押してください。':'キャッシュ不足。起動せず記録を送ってください。');
+ }catch(e){checked=false;report.status='cache_error';report.error=errorInfo(e);event('cache_error',{error:report.error});say('キャッシュ確認でエラー。起動せず診断記録を送ってください。');}
+ finally{busy=false;refresh();}
+});
+$('load').addEventListener('click',async()=>{
+ if(!validSite||busy||!checked||localStorage.getItem(ATTEMPT_KEY))return;
+ localStorage.setItem(ATTEMPT_KEY,new Date().toISOString());busy=true;report.status='initializing';event('pipeline_init_started');refresh();
+ try{
+  say('CPU/WASMでAIを起動中…');const m=await runtime();report.cacheBeforeLoad=await cacheStatus(m);
+  if(report.cacheBeforeLoad?.allCached!==true)throw new Error('モデルキャッシュが不足したため起動を中止しました。');
+  const t=performance.now();model=await m.pipeline('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+  report.modelInitMs=Math.round(performance.now()-t);state='ready';report.status='chat_ready';event('pipeline_ready',{ms:report.modelInitMs});
+  say('AI起動成功！短い文章を入力して送信できます。');showChat();
+ }catch(e){report.status='load_error';report.error=errorInfo(e);event('load_error',{error:report.error});state='finished';say('AI起動に失敗しました。再実行せず診断記録を送ってください。');await release();}
+ finally{busy=false;refresh();}
+});
+$('send').addEventListener('click',async()=>{
+ if(busy||state!=='ready'||!model)return;
+ const prompt=$('prompt').value.trim();
+ if(!prompt||prompt.length>MAX_INPUT||transcript.filter(t=>t.role==='user').length>=MAX_TURNS)return;
+ busy=true;$('prompt').value='';transcript.push({role:'user',content:prompt});showChat();refresh();
+ const turn=transcript.filter(t=>t.role==='user').length;
+ const messages=[...history,{role:'user',content:prompt}];
+ report.status='generating';event('turn_started',{turn,historyMessages:messages.length,inputLength:prompt.length});say('回答を生成中…');
+ try{
+  const start=performance.now();const output=await model(messages,{max_new_tokens:MAX_NEW_TOKENS,do_sample:false});
+  const answer=answerFrom(output);const elapsedMs=Math.round(performance.now()-start);
+  transcript.push({role:'assistant',content:answer});showChat();
+  report.lastTurn={turn,elapsedMs,answerLength:answer.length,inputLength:prompt.length};event('turn_finished',{turn,elapsedMs,answerLength:answer.length});
+  if(!answer.trim()){
+   await finish('空文字が返りました。ここで終了し、診断記録を送ってください。','empty_answer');
+  }else{
+   history=messages.concat([{role:'assistant',content:answer}]);
+   report.successfulTurns=turn;report.status='chat_ready';
+   if(turn>=MAX_TURNS)await finish('4往復の検証完了。ログをコピーして送ってください。','completed_four_turns');
+   else say('返答を受け取りました。次の質問も送れます。');
+  }
+ }catch(e){report.error=errorInfo(e);event('turn_error',{turn,error:report.error});await finish('生成エラーが発生しました。ここで終了し、診断記録を送ってください。','turn_error');}
+ finally{busy=false;persist();refresh();}
+});
+$('stop').addEventListener('click',async()=>{
+ if(busy||!model)return;
+ busy=true;refresh();await finish('AIを終了しました。診断記録を確認できます。','stopped_by_user');busy=false;refresh();
+});
+$('copy').addEventListener('click',async()=>{
+ try{await navigator.clipboard.writeText(JSON.stringify(exportData(),null,2));say('コピーしました。会話文が含まれるので共有前に内容を確認してください。');}
+ catch{say('自動コピーに失敗しました。下の診断記録はコピーできます。会話文は上の会話画面から確認してください。');}
+});
+$('clear').addEventListener('click',()=>{
+ if(busy||model)return;
+ try{localStorage.removeItem(LOG_KEY);}catch{}
+ report={version:VERSION,status:'diagnostics_cleared'};events=[];history=[];transcript=[];renderLog();showChat();
+ say('この検証の診断記録を削除しました。モデルキャッシュと再実行ロックは維持されています。');refresh();
+});
+window.addEventListener('pagehide',()=>{if(busy||model)event('pagehide',{status:report.status});});
+</script>
+</body>
+</html>
