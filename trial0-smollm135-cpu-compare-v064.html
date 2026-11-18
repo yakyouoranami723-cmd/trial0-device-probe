@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101825">
+<title>Trial Zero — CPU/WASM Comparison v0.6.4</title>
+<style>
+:root{color-scheme:dark;--bg:#101825;--panel:#1b2736;--line:#3a4d60;--text:#f3f7ff;--dim:#b0c0d2;--cyan:#80e2d0;--warn:#ffdc91}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}main{max-width:740px;margin:22px auto 45px}.eyebrow{color:var(--cyan);font-size:12px;font-weight:800;letter-spacing:.12em}h1{font-size:clamp(24px,6vw,31px);line-height:1.25;margin:8px 0}h2{font-size:17px;margin:0 0 10px}.dim{color:var(--dim)}.panel{border-radius:15px;background:var(--panel);border:1px solid var(--line);padding:15px;margin:13px 0}.note{border-color:#866c4b;background:#29271f}button{width:100%;font:700 15px system-ui;min-height:49px;padding:12px;border-radius:11px;border:1px solid #58a99d;background:#175f5a;color:#fff;margin:7px 0}button.subtle{background:#29374b;border-color:#52627b}button:disabled{opacity:.45}pre{background:#101825;border:1px solid var(--line);border-radius:10px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:600px;overflow:auto;font-size:12px;line-height:1.55}.status{color:var(--warn);min-height:28px;overflow-wrap:anywhere}.small{font-size:12px}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO / ON-DEVICE INFERENCE</div>
+<h1>WebGPUの全ゼロ出力を切り分ける — v0.6.4</h1>
+<p class="dim">前回の<strong>WebGPU + q4f16</strong>では、次トークンの点数49,152個が全部0でした。今回は<strong>同じ117MBのキャッシュ済みモデルをCPU/WASMで実行</strong>し、CPU側の出力がゼロかどうかを調べます。</p>
+<section class="panel note">
+<h2>今回の安全条件</h2>
+<ul>
+<li>モデルは前回のキャッシュを使い、<strong>新しいモデルファイルをダウンロードしません</strong>。キャッシュ不足なら中止します。</li>
+<li>キャッシュの削除や変更は行いません。WASM実行に必要な小さなランタイムファイルはCDNから取得する場合があります。</li>
+<li>WebGPUは使いません。モデルが大きいため、Safariが停止する可能性は残ります。実行は1回限りです。</li>
+<li>まずCPUで次トークンの点数を計測し、正常な点数が得られた場合のみ短い8トークン生成を行います。</li>
+<li>前回と同じiPhone 16のSafariでGitHub Pagesから開いてください。PWA・ファイルアプリ・Chromebookでは別の検証になります。</li>
+</ul>
+</section>
+<section class="panel">
+<h2>検証操作</h2>
+<button id="check">① 保存済みモデルを確認（モデル起動なし）</button>
+<button id="run" disabled>② キャッシュからCPU/WASMで1回だけ検証</button>
+<div id="status" class="status">まず①を押してください。</div>
+</section>
+<section class="panel">
+<h2>保存ログ</h2>
+<pre id="output">結果はここに表示されます。</pre>
+<button class="subtle" id="copy">結果をコピー</button>
+<button class="subtle" id="restore">保存済みログを表示</button>
+</section>
+</main>
+<script type="module">
+'use strict';
+const V='v0.6.4-smollm135-cpu-compare';
+const ORIGIN='https://yakyouoranami723-cmd.github.io';
+const ROOT='/trial0-device-probe/';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX';
+const DTYPE='q4f16';
+const DEVICE='wasm';
+const JS_VERSION='4.3.2';
+const CACHE_KEY='trial0-smollm135-v060';
+const ATTEMPT_KEY='trial0-smollm135-wasm-v064-attempt';
+const LOG_KEY='trial0-smollm135-wasm-v064-log';
+const PROMPT='The capital of France is';
+const $=id=>document.getElementById(id);
+let checked=false,busy=false,library=null,report={version:V,status:'not_started'},events=[];
+const validOrigin=location.origin===ORIGIN && location.pathname.startsWith(ROOT);
+function render(){ $('output').textContent=JSON.stringify({report,events},null,2); }
+function say(s){$('status').textContent=s;}
+function persist(){try{localStorage.setItem(LOG_KEY,JSON.stringify({report,events}));}catch{}render();}
+function log(type,details={}){events.push({at:new Date().toISOString(),type,...details});events=events.slice(-50);persist();}
+function errorInfo(e){return {name:String(e?.name||'Error'),message:String(e?.message||e||'unknown').slice(0,1500),stack:typeof e?.stack==='string'?e.stack.split('\n').slice(0,5).join('\n'):null};}
+function restore(){try{const old=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(old){report=old.report||report;events=Array.isArray(old.events)?old.events:[];}}catch{}render();if(localStorage.getItem(ATTEMPT_KEY)){$('run').disabled=true;say('この版の実行は開始済み。再実行せず保存ログを送ってください。');}}
+if(!validOrigin){$('check').disabled=true;$('run').disabled=true;report={version:V,status:'wrong_origin',origin:location.origin,path:location.pathname};say('前回と同じGitHub PagesのSafariから開いてください。');render();}else{restore();}
+$('restore').addEventListener('click',restore);
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({report,events},null,2));say('コピーしました。ログをチャットに貼り付けてください。');}catch{say('自動コピーできません。JSON部分を選択してコピーしてください。');}});
+async function getLibrary(){
+ if(library)return library;
+ const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+ m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=CACHE_KEY;
+ m.env.allowLocalModels=false;m.env.allowRemoteModels=true;
+ if(m.env.backends?.onnx?.wasm){m.env.backends.onnx.wasm.numThreads=1;}
+ const nativeFetch=globalThis.fetch.bind(globalThis);
+ m.env.fetch=async(input,init)=>{
+  const raw=typeof input==='string'?input:(input?.url||String(input));
+  const u=new URL(raw,location.href);
+  if(u.origin!==location.origin && u.hostname!=='cdn.jsdelivr.net'){
+   report.blockedModelRequests=(report.blockedModelRequests||[]).slice(-8).concat([{at:new Date().toISOString(),hostname:u.hostname,path:u.pathname.slice(0,160)}]);
+   persist();throw Error('モデルの外部取得をブロック: '+u.hostname);
+  }
+  return nativeFetch(input,init);
+ };
+ library=m;return m;
+}
+async function cacheStatus(m){
+ if(typeof m.ModelRegistry?.is_pipeline_cached_files!=='function')throw Error('キャッシュ確認APIが利用できません。');
+ return await m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+}
+$('check').addEventListener('click',async()=>{
+ if(!validOrigin||busy||localStorage.getItem(ATTEMPT_KEY))return;
+ busy=true;$('check').disabled=true;$('run').disabled=true;
+ report={version:V,status:'checking_cache',startedAt:new Date().toISOString(),model:MODEL,device:DEVICE,dtype:DTYPE,cacheKey:CACHE_KEY,modelDownloadAttempted:false,fullGenerationAttempted:false};events=[];persist();
+ try{
+  say('Transformers.jsとキャッシュを確認中…');
+  const m=await getLibrary();report.runtimeVersion=m.env?.version||JS_VERSION;
+  const s=await cacheStatus(m);report.modelCache=s;checked=s?.allCached===true;
+  report.status=checked?'cache_ready':'cache_missing';log('cache_checked',{allCached:checked});
+  say(checked?'同じモデルの全ファイルを確認できました。②でCPU比較を実行できます。':'モデルキャッシュ不足。②は押さずログを送ってください。');
+ }catch(e){report.status='cache_error';report.error=errorInfo(e);log('cache_error');say('キャッシュ確認でエラー。②は実行しません。');}
+ finally{busy=false;$('check').disabled=false;$('run').disabled=!checked||!!localStorage.getItem(ATTEMPT_KEY);persist();}
+});
+function summarize(logits,tokenizer){
+ const data=logits?.data,dims=Array.from(logits?.dims||[]);
+ if(!data||!data.length)throw Error('logits.dataが空でした。');
+ const vocab=Number(dims.at(-1));if(!Number.isInteger(vocab)||vocab<100||vocab>data.length)throw Error('出力の語彙数が不正: '+vocab);
+ const start=data.length-vocab;let finite=0,zero=0,nan=0,posInf=0,negInf=0,min=Infinity,max=-Infinity,imax=0;const leaders=[];
+ for(let i=0;i<vocab;i++){
+  const v=Number(data[start+i]);
+  if(Number.isNaN(v)){nan++;continue;}if(v===Infinity){posInf++;continue;}if(v===-Infinity){negInf++;continue;}
+  if(!Number.isFinite(v))continue;finite++;if(v===0)zero++;if(v<min)min=v;if(v>max){max=v;imax=i;}
+  if(leaders.length<5||v>leaders[leaders.length-1].score){leaders.push({id:i,score:v});leaders.sort((a,b)=>b.score-a.score||a.id-b.id);if(leaders.length>5)leaders.pop();}
+ }
+ const decode=id=>{try{return String(tokenizer.decode([id],{skip_special_tokens:false})).slice(0,80);}catch{return '?';}};
+ return {dims,dataType:String(logits?.type||data.constructor?.name||'unknown'),vocab,finite,zero,nan,posInf,negInf,min:finite?min:null,max:finite?max:null,argmax:imax,argmaxText:decode(imax),top5:leaders.map(x=>({...x,text:decode(x.id)})),allFiniteZero:finite===vocab&&zero===vocab};
+}
+function answerFrom(x){const y=x?.[0]?.generated_text;if(Array.isArray(y))return String(y.at(-1)?.content||'');return typeof y==='string'?y:JSON.stringify(x);}
+$('run').addEventListener('click',async()=>{
+ if(!validOrigin||busy||!checked||localStorage.getItem(ATTEMPT_KEY))return;
+ localStorage.setItem(ATTEMPT_KEY,new Date().toISOString());busy=true;$('run').disabled=true;$('check').disabled=true;
+ report.status='starting_wasm';report.runStartedAt=new Date().toISOString();log('wasm_started');
+ let gen=null;
+ try{
+  const m=await getLibrary();report.modelCacheBeforeRun=await cacheStatus(m);
+  if(report.modelCacheBeforeRun?.allCached!==true)throw Error('直前のキャッシュ確認が失敗しました。モデルは読み込みません。');
+  say('CPU/WASMで同じモデルを初期化中…');log('wasm_pipeline_started');
+  gen=await m.pipeline('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+  report.status='pipeline_ready';log('wasm_pipeline_ready');
+  const tok=gen.tokenizer(PROMPT);report.input={prompt:PROMPT,ids:Array.from(tok.input_ids?.data||[]).map(String),dims:Array.from(tok.input_ids?.dims||[])};
+  say('CPUで次トークンのlogitsを測定中…');log('wasm_forward_started');const t0=performance.now();
+  const result=await gen.model(tok);report.forwardMs=Math.round(performance.now()-t0);
+  report.logits=summarize(result?.logits,gen.tokenizer);log('wasm_forward_finished',{allFiniteZero:report.logits.allFiniteZero,zeros:report.logits.zero,finite:report.logits.finite});
+  try{result?.logits?.dispose?.();}catch{}
+  if(report.logits.allFiniteZero){report.status='all_zero_on_wasm_too';say('CPUでもlogitsが全部0でした。結果を送ってください。');}
+  else if(report.logits.finite<report.logits.vocab){report.status='nonfinite_logits';say('非有限値が含まれていました。文章生成せずログを送ってください。');}
+  else {
+   report.status='nonzero_logits_confirmed';say('CPUでゼロ以外の点数を確認。短文を1回だけ生成中…');
+   log('wasm_generation_started');report.fullGenerationAttempted=true;
+   const g=await gen(PROMPT,{max_new_tokens:8,do_sample:false,return_full_text:false});
+   report.generationRaw=JSON.stringify(g,(k,v)=>typeof v==='bigint'?String(v):v).slice(0,1800);
+   report.answer=answerFrom(g);report.status=report.answer.trim().length?'cpu_text_generated':'cpu_nonzero_but_no_text';
+   log('wasm_generation_finished',{chars:report.answer.length});say('CPU比較終了。ログを送ってください。');
+  }
+ }catch(e){report.status='wasm_error';report.error=errorInfo(e);log('wasm_error',{message:report.error.message});say('CPU検証でエラー。再実行せずログを送ってください。');}
+ finally{
+  if(gen){try{await gen.dispose?.();log('generator_disposed');}catch(e){log('dispose_error',{message:String(e)});}}
+  report.completedAt=new Date().toISOString();log('finished',{status:report.status});busy=false;$('check').disabled=false;
+ }
+});
+window.addEventListener('pagehide',()=>{if(busy)log('pagehide',{status:report.status});});
+</script>
+</body>
+</html>
