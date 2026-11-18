@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c1420">
+<title>Trial Zero — SmolLM2 Logits Diagnosis v0.6.3</title>
+<style>
+:root{color-scheme:dark;--bg:#0c1420;--panel:#172334;--line:#385067;--text:#f3f8ff;--muted:#aec2d4;--teal:#61dbc7;--gold:#f8d18f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:770px;margin:auto;padding:20px 0 46px}.brand{color:var(--teal);font-size:12px;font-weight:800;letter-spacing:.13em}h1{font-size:clamp(24px,6vw,31px);line-height:1.22;margin:8px 0 12px}h2{font-size:17px;margin:0 0 9px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:14px 0}.warning{border-color:#8b6e43;background:#2e271e}.muted{color:var(--muted)}.small{font-size:12px}
+button{width:100%;border:1px solid #46ab9e;border-radius:11px;background:#116e67;color:white;font:750 15px system-ui;padding:14px;margin:7px 0;min-height:48px}button.secondary{background:#26364b;border-color:#57708c}button:disabled{opacity:.42}
+pre{background:#0c1726;border:1px solid var(--line);padding:12px;border-radius:10px;max-height:540px;overflow:auto;overflow-wrap:anywhere;white-space:pre-wrap;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}.status{color:var(--gold);min-height:27px;overflow-wrap:anywhere}
+</style>
+</head>
+<body><main>
+<div class="brand">TRIAL ZERO / NUMERICAL DIAGNOSTIC</div>
+<h1>SmolLM2 — トークン0の原因調査 v0.6.3</h1>
+<p class="muted">v0.6.2で毎回 <code>&lt;|endoftext|&gt;</code> が選ばれる原因を調べます。モデルの計算結果（logits）にNaNや無限大があるか、最も高い点数のトークンは何かを直接確認します。</p>
+<section class="panel warning"><h2>今回の制限</h2>
+<ul>
+<li><strong>v0.6.0で保存された117MBモデルを再使用。</strong>全ファイルのキャッシュが確認できなければ実行しません。</li>
+<li>モデルのネットワーク取得は遮断。モデルの再ダウンロード、新しいモデルの追加、キャッシュ削除はしません。</li>
+<li>短い英文の「次の1トークン」の点数を調べ、最後に生成結果との一致を1回だけ確認します。</li>
+<li>数値を要約して保存し、49152個の点数をそのまま出力することはしません。</li>
+<li>Safariが白画面になった場合は再実行しないで、保存ログを確認してください。</li>
+</ul>
+<p class="muted small">iPhoneの通常のSafariで、前回と同じGitHub Pagesから開いてください。オフラインでもライブラリが読み込めるとは限りません。</p>
+</section>
+<section class="panel"><h2>① キャッシュ確認（モデル起動なし）</h2>
+<button id="check">保存済みモデルを確認</button>
+<h2 style="margin-top:18px">② logitsと次の1トークンを確認（1回限り）</h2>
+<button id="run" disabled>モデルの計算値を診断</button>
+<div class="status" id="status">先に①を押してください。</div>
+</section>
+<section class="panel"><h2>結果ログ</h2>
+<pre id="output">まだ実行していません。</pre>
+<button id="copy" class="secondary">結果をコピー</button>
+<button id="restore" class="secondary">保存済みログを再表示</button>
+</section>
+</main>
+<script type="module">
+'use strict';
+const VERSION='v0.6.3-smollm135-logits';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX', DTYPE='q4f16',DEVICE='webgpu',JS_VERSION='4.3.2';
+const ORIGIN='https://yakyouoranami723-cmd.github.io',ROOT='/trial0-device-probe/';
+const MODEL_CACHE='trial0-smollm135-v060';
+const LOG_KEY='trial0-smollm135-logits-v063-log', ATTEMPT_KEY='trial0-smollm135-logits-v063-once';
+const PROMPT='The capital of France is';
+const $=id=>document.getElementById(id);
+const rightPlace=location.origin===ORIGIN&&location.pathname.startsWith(ROOT);
+let checked=false,busy=false,lib=null,report={version:VERSION,status:'idle'},events=[];
+function render(){$('output').textContent=JSON.stringify({report,events},null,2);}
+function save(event,data={}){events.push({at:new Date().toISOString(),event,...data});events=events.slice(-70);persist();}
+function persist(){try{localStorage.setItem(LOG_KEY,JSON.stringify({report,events}));}catch{}render();}
+function say(s){$('status').textContent=s;}
+function err(e){return {name:String(e?.name||'Error'),message:String(e?.message||e||'Unknown error').slice(0,1400),stack:String(e?.stack||'').slice(0,750)};}
+function restore(){try{const x=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(x){report=x.report||report;events=Array.isArray(x.events)?x.events:[];}}catch{}render();if(localStorage.getItem(ATTEMPT_KEY)){$('run').disabled=true;say('この版の診断は一度開始済みです。再実行しないで保存ログを送ってください。');}}
+if(!rightPlace){$('check').disabled=true;$('run').disabled=true;report={version:VERSION,status:'wrong_origin',origin:location.origin,path:location.pathname};say('GitHub Pagesの正しいドメインから開いてください。');render();}else restore();
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({report,events},null,2));say('ログをコピーしました。チャットへ貼り付けてください。');}catch(e){say('コピーできませんでした。JSONを長押しで選択してください。');}});
+$('restore').addEventListener('click',restore);
+async function getLibrary(){
+ if(lib)return lib;
+ lib=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+ lib.env.useBrowserCache=true;lib.env.useWasmCache=true;lib.env.cacheKey=MODEL_CACHE;
+ lib.env.allowLocalModels=false;lib.env.allowRemoteModels=true;
+ const originalFetch=globalThis.fetch.bind(globalThis);
+ lib.env.fetch=async(input,init)=>{
+  const raw=typeof input==='string'?input:(input?.url||String(input));
+  const u=new URL(raw,location.href);
+  if(u.origin!==location.origin&&u.hostname!=='cdn.jsdelivr.net'){
+   report.blockedModelRequests=(report.blockedModelRequests||0)+1;
+   persist();throw new Error('キャッシュ不足によりモデル取得を遮断: '+u.hostname);
+  }
+  return originalFetch(input,init);
+ };
+ return lib;
+}
+async function getCache(m){
+ if(typeof m.ModelRegistry?.is_pipeline_cached_files!=='function')throw Error('キャッシュ確認APIを利用できません。');
+ return await m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+}
+$('check').addEventListener('click',async()=>{
+ if(!rightPlace||busy||localStorage.getItem(ATTEMPT_KEY))return;
+ busy=true;$('check').disabled=true;$('run').disabled=true;
+ report={version:VERSION,status:'cache_check',startedAt:new Date().toISOString(),model:MODEL,dtype:DTYPE,device:DEVICE,modelCacheKey:MODEL_CACHE,modelDownloadAttempted:false};events=[];persist();
+ try{
+  say('キャッシュを確認中…');const m=await getLibrary();report.runtimeVersion=m.env?.version||JS_VERSION;
+  report.cache=await getCache(m);checked=report.cache?.allCached===true;
+  report.status=checked?'cache_ready':'cache_missing';save('cache_check_complete',{allCached:checked});
+  say(checked?'保存済みモデルを確認しました。②を押せます。':'キャッシュに不足があります。②は実行せずログを送ってください。');
+ }catch(e){report.status='cache_check_error';report.error=err(e);save('cache_check_error');say('キャッシュ確認エラー。実行しないでログを送ってください。');}
+ finally{busy=false;$('check').disabled=false;$('run').disabled=!checked||!!localStorage.getItem(ATTEMPT_KEY);persist();}
+});
+function scanLogits(logits,tokenizer){
+ const data=logits?.data;const dims=Array.from(logits?.dims||[]);
+ if(!data||typeof data.length!=='number'||data.length===0)throw Error('logits.dataが取得できません。');
+ const vocab=Number(dims.at(-1))||49152;
+ if(!Number.isInteger(vocab)||vocab<=0||vocab>data.length)throw Error('不正な語彙サイズ: '+vocab);
+ const start=data.length-vocab;let nan=0,posInf=0,negInf=0,finite=0,zeros=0,min=Infinity,max=-Infinity,argMax=null,finiteSum=0;
+ let top=[];
+ for(let id=0;id<vocab;id++){
+  const val=Number(data[start+id]);
+  if(Number.isNaN(val)){nan++;continue;}
+  if(val===Infinity){posInf++;continue;}
+  if(val===-Infinity){negInf++;continue;}
+  if(!Number.isFinite(val)){nan++;continue;}
+  finite++;finiteSum+=val;
+  if(val===0)zeros++;
+  if(val<min)min=val;
+  if(val>max){max=val;argMax=id;}
+  if(top.length<7||val>top[top.length-1].score){
+   top.push({id,score:val});top.sort((a,b)=>b.score-a.score||a.id-b.id);if(top.length>7)top.pop();
+  }
+ }
+ function decode(id){try{return tokenizer.decode([id],{skip_special_tokens:false});}catch(e){return 'decode error';}}
+ return {dims,dataType:String(logits?.type||data.constructor?.name||'unknown'),totalElements:data.length,vocab,
+  nanCount:nan,posInfCount:posInf,negInfCount:negInf,finiteCount:finite,zeroCount:zeros,
+  minFinite:finite?min:null,maxFinite:finite?max:null,meanFinite:finite?finiteSum/finite:null,
+  firstTokenId0Score:Number.isNaN(Number(data[start]))?'NaN':Number(data[start]),
+  endTokenId2Score:Number.isNaN(Number(data[start+2]))?'NaN':Number(data[start+2]),
+  greedyTokenId:argMax,greedyTokenText:argMax===null?null:decode(argMax),
+  top7:top.map(x=>({id:x.id,score:x.score,text:decode(x.id)}))};
+}
+$('run').addEventListener('click',async()=>{
+ if(!rightPlace||!checked||busy||localStorage.getItem(ATTEMPT_KEY))return;
+ localStorage.setItem(ATTEMPT_KEY,new Date().toISOString());busy=true;$('run').disabled=true;$('check').disabled=true;
+ report.status='initializing';report.runStartedAt=new Date().toISOString();save('run_started');
+ let generator=null;
+ try{
+  const m=await getLibrary();report.cacheBeforeRun=await getCache(m);
+  if(report.cacheBeforeRun?.allCached!==true)throw Error('モデルキャッシュが不足しました。実行中止。');
+  say('キャッシュからモデルを読み込み中…');save('pipeline_initialization_started');
+  generator=await m.pipeline('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+  report.status='pipeline_ready';save('pipeline_ready');
+  report.input={prompt:PROMPT};
+  const input=generator.tokenizer(PROMPT);
+  report.input.inputIds=Array.from(input.input_ids?.data||[]).slice(-20).map(String);
+  report.input.inputDims=Array.from(input.input_ids?.dims||[]);
+  say('次の1トークンの生の点数を調査中…');save('forward_started');
+  const started=performance.now();
+  const out=await generator.model(input);
+  report.forwardDurationMs=Math.round(performance.now()-started);
+  report.logits=scanLogits(out?.logits,generator.tokenizer);
+  save('forward_finished',{nanCount:report.logits.nanCount,finiteCount:report.logits.finiteCount,greedyTokenId:report.logits.greedyTokenId});
+  try{out?.logits?.dispose?.();}catch(e){report.logitsDisposeError=err(e);}
+  say('1トークン生成の結果と比較中…');save('generation_started');
+  const generated=await generator(PROMPT,{max_new_tokens:1,do_sample:false,return_full_text:false});
+  report.generationRaw=JSON.stringify(generated,(k,v)=>typeof v==='bigint'?String(v):v).slice(0,2000);
+  report.status='completed';save('generation_finished');say('診断完了。ログをコピーして送ってください。');
+ }catch(e){report.status='error';report.error=err(e);save('run_error',{message:report.error.message});say('途中でエラーが出ました。再実行せずログを送ってください。');}
+ finally{if(generator){try{await generator.dispose?.();save('generator_disposed');}catch(e){save('dispose_error',{message:String(e)});}}
+  report.completedAt=new Date().toISOString();save('finished',{status:report.status});busy=false;$('check').disabled=false;}
+});
+window.addEventListener('pagehide',()=>{if(busy)save('pagehide',{status:report.status});});
+</script>
+</body></html>
