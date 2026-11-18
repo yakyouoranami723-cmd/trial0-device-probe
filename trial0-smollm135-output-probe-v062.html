@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0c1420">
+<title>Trial Zero — SmolLM2 Output Diagnosis v0.6.2</title>
+<style>
+:root{color-scheme:dark;--bg:#0c1420;--panel:#172334;--line:#385067;--text:#f3f8ff;--muted:#aec2d4;--teal:#61dbc7;--gold:#f8d18f}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,BlinkMacSystemFont,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:770px;margin:auto;padding:20px 0 46px}.brand{color:var(--teal);font-size:12px;font-weight:800;letter-spacing:.13em}h1{font-size:clamp(24px,6vw,31px);line-height:1.22;margin:8px 0 12px}h2{font-size:17px;margin:0 0 9px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:15px;padding:15px;margin:14px 0}.warning{border-color:#8b6e43;background:#2e271e}.muted{color:var(--muted)}.small{font-size:12px}
+button{width:100%;border:1px solid #46ab9e;border-radius:11px;background:#116e67;color:white;font:750 15px system-ui;padding:14px;margin:7px 0;min-height:48px}button.secondary{background:#26364b;border-color:#57708c}button:disabled{opacity:.42}
+pre{background:#0c1726;border:1px solid var(--line);padding:12px;border-radius:10px;max-height:540px;overflow:auto;overflow-wrap:anywhere;white-space:pre-wrap;font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace}.status{color:var(--gold);min-height:27px;overflow-wrap:anywhere}.good{color:#7ce5c2}.dot{height:8px;width:8px;border-radius:50%;background:#5bdae2;display:inline-block;margin-right:6px}
+</style>
+</head>
+<body><main>
+<div class="brand">TRIAL ZERO / OUTPUT DIAGNOSTIC</div>
+<h1>SmolLM2 135M — 空文字の原因調査 v0.6.2</h1>
+<p class="muted">前回の <strong>WebGPU・q4f16・Transformers.js 4.3.2</strong> を維持。前回保存したモデルのキャッシュを確認し、出力の生データとトークンを記録します。</p>
+<section class="panel warning">
+<h2>今回の安全策</h2>
+<ul>
+<li><strong>モデルファイルの再ダウンロード防止：</strong>キャッシュ全ファイルがあると確認できなければ実行できません。</li>
+<li>ライブラリのモデル参照設定は有効にし、モデルファイルの外部取得は専用の通信ガードで遮断します。実行用ライブラリ等のCDN取得は許可します。</li>
+<li>前回のキャッシュは削除・変更しません。別モデルもダウンロードしません。</li>
+<li>短い英語の生成を<strong>2回だけ</strong>行い、チャット形式と通常の文章補完形式を比べます。</li>
+<li>Safariが白画面になった場合は再実行せず、ページを開き直して保存ログをコピーしてください。</li>
+</ul>
+<p class="muted small">iPhoneのSafariで、前回と同じGitHub PagesのURLから開いてください。ChromebookやローカルHTMLでの実行は対象外です。</p>
+</section>
+<section class="panel">
+<h2>① キャッシュ確認（モデル起動なし）</h2>
+<button id="check">保存済み117MBモデルを確認</button>
+<h2 style="margin-top:17px">② 生の出力・トークンを調査（1回限り）</h2>
+<button id="run" disabled>キャッシュ済みモデルで2種類の短文生成</button>
+<div class="status" id="status">先に①を押してください。</div>
+</section>
+<section class="panel">
+<h2>診断ログ</h2>
+<p class="muted small">生成された英語、元の出力オブジェクト、各トークンIDを別々に記録。入力は固定の検証文のみです。</p>
+<pre id="output">まだ診断していません。</pre>
+<button class="secondary" id="copy">記録をコピー</button>
+<button class="secondary" id="restore">保存した記録を再表示</button>
+</section>
+</main>
+<script type="module">
+'use strict';
+const VERSION='v0.6.2-smollm135-output';
+const ORIGIN='https://yakyouoranami723-cmd.github.io';
+const ROOT='/trial0-device-probe/';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX';
+const DTYPE='q4f16', DEVICE='webgpu', LIB='4.3.2';
+const CACHE_KEY='trial0-smollm135-v060'; // Exactly the v0.6.0 model cache.
+const LOG_KEY='trial0-smollm135-output-v062-log';
+const ATTEMPT_KEY='trial0-smollm135-output-v062-once';
+const $=id=>document.getElementById(id);
+const rightPlace=location.origin===ORIGIN && location.pathname.startsWith(ROOT);
+let checked=false,busy=false,lib=null,report={version:VERSION,status:'idle'},events=[];
+const errorInfo=e=>({name:String(e?.name||'Error'),message:String(e?.message||e||'Unknown error').slice(0,1200),stack:String(e?.stack||'').slice(0,1000)});
+function print(){ $('output').textContent=JSON.stringify({report,events},null,2); }
+function log(event,data={}){events.push({at:new Date().toISOString(),event,...data});events=events.slice(-90);persist();}
+function persist(){try{localStorage.setItem(LOG_KEY,JSON.stringify({report,events}));}catch{}print();}
+function say(text){$('status').textContent=text;}
+function restore(){try{const old=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(old){report=old.report||report;events=Array.isArray(old.events)?old.events:[];}}catch{}print();if(localStorage.getItem(ATTEMPT_KEY)){$('run').disabled=true;say('この版の実行は開始済みです。再実行せず保存ログを送ってください。');}}
+function safeRaw(value){try{return JSON.stringify(value,(k,v)=>typeof v==='bigint'?v.toString():v).slice(0,7000);}catch(e){return 'JSON conversion failed: '+String(e);}}
+function answerFromRaw(raw){const item=Array.isArray(raw)?raw[0]:raw;const g=item?.generated_text;if(typeof g==='string')return g;if(Array.isArray(g)){const last=g.at(-1);return last?.role==='assistant'?String(last?.content??''):null;}return null;}
+function newAttempt(name,inputType){return {name,inputType,startedAt:new Date().toISOString(),streamChunks:[],tokenIds:[],tokenCallbackCount:0};}
+if(!rightPlace){ $('check').disabled=true;$('run').disabled=true; report={version:VERSION,status:'wrong_origin',origin:location.origin,path:location.pathname};say('このURLでは実行できません。GitHub PagesをSafariで開いてください。');print();}
+else {restore();}
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({report,events},null,2));say('ログをコピーしました。ここに貼り付けてください。');}catch(e){say('コピーに失敗しました。JSONを選択してコピーしてください。');}});
+$('restore').addEventListener('click',()=>{restore();});
+async function loadRuntime(){
+ if(lib)return lib;
+ lib=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+ // Cache URLs are based on the remote model ID. Disabling both remote and local models
+ // makes ModelRegistry fail before it can inspect the browser cache.
+ lib.env.useBrowserCache=true;
+ lib.env.useWasmCache=true;
+ lib.env.cacheKey=CACHE_KEY;
+ lib.env.allowLocalModels=false;
+ lib.env.allowRemoteModels=true;
+ // Transformers.js 4.x uses env.fetch for model asset requests.
+ // Once models are resolved, only same-origin and runtime CDN requests may reach the network.
+ // Any cache miss for a model on Hugging Face is explicitly blocked.
+ const originalFetch=globalThis.fetch.bind(globalThis);
+ lib.env.fetch=async (input,init)=>{
+  const raw=typeof input==='string'?input:(input?.url||String(input));
+  let u;
+  try{u=new URL(raw,location.href);}catch(e){throw Error('不明なURLをブロックしました: '+String(raw).slice(0,150));}
+  if(u.origin!==location.origin && u.hostname!=='cdn.jsdelivr.net'){
+   report.blockedRequests=(report.blockedRequests||[]).slice(-9).concat([{
+    at:new Date().toISOString(),host:u.hostname,path:u.pathname.slice(0,160)
+   }]);
+   persist();
+   throw Error('未キャッシュのモデル等のネットワーク取得を遮断しました: '+u.hostname);
+  }
+  return originalFetch(input,init);
+ };
+ return lib;
+}
+async function cacheStatus(m){
+ if(typeof m.ModelRegistry?.is_pipeline_cached_files!=='function')throw Error('キャッシュ確認APIがありません。安全のため実行を中止します。');
+ return await m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+}
+$('check').addEventListener('click',async()=>{
+ if(!rightPlace||busy||localStorage.getItem(ATTEMPT_KEY))return;
+ busy=true;$('check').disabled=true;$('run').disabled=true;
+ report={version:VERSION,status:'checking_cache',origin:location.origin,model:MODEL,dtype:DTYPE,device:DEVICE,cacheKey:CACHE_KEY,modelReDownloaded:false,generationAttempted:false,networkGuard:'blocks off-origin requests except cdn.jsdelivr.net'};events=[];persist();
+ try{
+  say('Transformers.jsを読み込み、キャッシュ状態だけを確認中…');
+  const m=await loadRuntime();
+  report.runtimeVersion=m.env?.version||LIB;
+  const result=await cacheStatus(m);
+  report.cacheCheck=result;checked=result?.allCached===true;
+  if(checked){report.status='cache_ready';say('全ファイルがキャッシュにあります。②を押して診断できます。');}
+  else{report.status='cache_missing';say('キャッシュに不足があります。②は実行しません。ログを送ってください。');}
+  log('cache_check_complete',{allCached:checked});
+ }catch(e){report.status='cache_check_error';report.error=errorInfo(e);log('cache_check_error',{error:report.error});say('キャッシュ確認に失敗。実行はしません。');}
+ finally{busy=false;$('check').disabled=false;$('run').disabled=!checked||!!localStorage.getItem(ATTEMPT_KEY);persist();}
+});
+async function runCase(generator,m,info,input,options){
+ log('case_started',{name:info.name,inputType:info.inputType});
+ const tokenIds=[];const pieces=[];
+ let streamer=null;
+ if(typeof m.TextStreamer==='function'){
+  streamer=new m.TextStreamer(generator.tokenizer,{
+   skip_prompt:true, skip_special_tokens:true,
+   callback_function:text=>{if(typeof text==='string'&&pieces.length<50)pieces.push(text);},
+   token_callback_function:tokens=>{info.tokenCallbackCount++;if(tokens&&typeof tokens[Symbol.iterator]==='function')for(const t of tokens){if(tokenIds.length<80)tokenIds.push(String(t));}}
+  });
+ }
+ const begin=performance.now();
+ try{
+  const output=await generator(input,{...options,...(streamer?{streamer}:{})});
+  info.elapsedMs=Math.round(performance.now()-begin);
+  info.rawOutput=safeRaw(output);
+  info.extractedAnswer=answerFromRaw(output);
+  info.streamText=pieces.join('').slice(0,1500);
+  info.streamChunks=pieces.slice(0,40);
+  info.tokenIds=tokenIds;
+  info.tokenCallbackCount=info.tokenCallbackCount;
+  if(tokenIds.length){try{
+   const nums=tokenIds.map(x=>Number(x));
+   info.tokenDecodeWithSpecials=String(generator.tokenizer.decode(nums,{skip_special_tokens:false})).slice(0,1500);
+   info.tokenDecodeWithoutSpecials=String(generator.tokenizer.decode(nums,{skip_special_tokens:true})).slice(0,1500);
+  }catch(e){info.tokenDecodeError=errorInfo(e);}}
+  info.status='returned';info.completedAt=new Date().toISOString();
+  log('case_returned',{name:info.name,answerLength:info.extractedAnswer?.length??null,tokenCallbackCount:info.tokenCallbackCount});
+ }catch(e){info.elapsedMs=Math.round(performance.now()-begin);info.status='error';info.error=errorInfo(e);info.streamText=pieces.join('').slice(0,1500);info.tokenIds=tokenIds;info.completedAt=new Date().toISOString();log('case_error',{name:info.name,error:info.error});}
+ persist();
+}
+$('run').addEventListener('click',async()=>{
+ if(!rightPlace||busy||!checked||localStorage.getItem(ATTEMPT_KEY))return;
+ busy=true;$('check').disabled=true;$('run').disabled=true;
+ localStorage.setItem(ATTEMPT_KEY,new Date().toISOString());
+ report.status='initializing';report.generationAttempted=false;report.startedAt=new Date().toISOString();report.tests=[];report.modelReDownloaded=false;
+ log('run_started');
+ let generator;
+ try{
+  say('キャッシュを再確認中…');
+  const m=await loadRuntime();
+  const state=await cacheStatus(m);
+  report.cacheRecheck=state;
+  if(state?.allCached!==true)throw Error('開始直前にキャッシュ不足を検出。モデルは読み込みません。');
+  // The cache check passes first; env.fetch rejects any model network requests.
+  say('キャッシュ済みモデルのWebGPU初期化中…');log('pipeline_initialization_started');
+  generator=await m.pipeline('text-generation',MODEL,{device:DEVICE,dtype:DTYPE,
+   progress_callback:x=>{if(x?.status==='ready'||x?.status==='done')log('pipeline_progress',{status:x.status,file:x.file?String(x.file).split('/').pop():null});}
+  });
+  report.status='pipeline_ready';log('pipeline_ready');
+  report.generationAttempted=true;
+  const a=newAttempt('A_chat_same_as_v060','chat');report.tests.push(a);persist();
+  say('A: 前回と同じチャット形式を生成中…');
+  await runCase(generator,m,a,[{role:'user',content:'Say hello in one short English sentence.'}],{max_new_tokens:16,do_sample:false});
+  const b=newAttempt('B_plain_text_completion','plain');report.tests.push(b);persist();
+  say('B: 普通の英文補完を生成中…');
+  await runCase(generator,m,b,'The capital of France is',{max_new_tokens:24,do_sample:false,return_full_text:false});
+  const nonempty=report.tests.some(t=>typeof t.extractedAnswer==='string'&&t.extractedAnswer.trim().length>0);
+  report.status=nonempty?'nonempty_output_confirmed':'both_outputs_empty_or_error';
+  say(nonempty?'文字のある回答を確認できました。ログをコピーしてください。':'2形式の診断終了。出力とトークンのログをコピーしてください。');
+ }catch(e){report.status='run_error';report.error=errorInfo(e);log('run_error',{error:report.error});say('診断が停止しました。保存ログを送ってください。');}
+ finally{
+  if(generator){try{await generator.dispose?.();log('generator_disposed');}catch(e){log('dispose_error',{error:errorInfo(e)});}}
+  report.completedAt=new Date().toISOString();log('finished',{status:report.status});busy=false;$('check').disabled=false;
+ }
+});
+window.addEventListener('pagehide',()=>{if(busy)log('pagehide',{status:report.status});});
+</script>
+</body>
+</html>
