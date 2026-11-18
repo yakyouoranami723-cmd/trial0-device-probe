@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d1220">
+<title>Trial Zero — Small LLM Probe v0.6.0</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1220;--card:#1a2233;--border:#35445b;--accent:#65d0c7;--text:#f4f7ff;--muted:#a9b7cd}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,sans-serif;margin:0;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:720px;margin:auto;padding:20px 0 40px}
+.brand{color:var(--accent);font-weight:800;font-size:12px;letter-spacing:.1em}
+h1{font-size:clamp(23px,6vw,30px);line-height:1.25;margin:6px 0 12px}
+h2{font-size:17px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:13px;padding:15px;margin:12px 0}
+.note{border-color:#777c43;background:#262819}
+p,li{margin:7px 0}.muted{color:var(--muted)}small{font-size:12px}
+button{width:100%;border:1px solid #3d8e88;border-radius:10px;background:#176a64;color:white;font:700 16px system-ui;padding:14px;margin:7px 0;cursor:pointer}
+button.alt{background:#263650;border-color:#506987}button:disabled{opacity:.45;cursor:default}
+pre{background:#101726;border:1px solid var(--border);border-radius:9px;padding:12px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:460px;overflow:auto;font-size:12px}
+#status{color:#ccebe8;min-height:30px}code{color:#c9efeb}
+</style>
+</head>
+<body><main>
+<div class="brand">TRIAL ZERO / SMALL MODEL TEST</div>
+<h1>小型AIの実機テスト v0.6.0</h1>
+<p class="muted">Qwen 483MBの再実行はしません。代わりにSmolLM2-135M-Instructの約117MBモデルを、同じiPhone SafariのWebGPUで1回だけ試します。</p>
+<div class="card note">
+<h2>この実験で確かめること</h2>
+<p>① ブラウザーへの小さいデータの保存ができるか → ② 小型LLMを初期化できるか → ③ 英語の固定文から短文を生成できるか。</p>
+<p><strong>モデルのダウンロードは②のボタンを押した場合のみ開始</strong>。推論はiPhone内で実行し、会話履歴や個人データは送信しません。最初のモデル取得にはインターネット接続が必要です。</p>
+<p><small>SmolLM2-135Mは動作検証用の英語中心の小型モデルです。Trial Zeroの最終モデルを変更する決定ではありません。最初は①だけ行ってください。</small></p>
+</div>
+<div class="card">
+<h2>① ブラウザー保存の小テスト</h2>
+<button id="cacheTest">約1KBのデータを書き込み・読み取り・削除</button>
+<p class="muted"><small>自分専用の一時キャッシュを作り、すぐ削除します。以前のQwenキャッシュには触れません。</small></p>
+</div>
+<div class="card">
+<h2>② 小型LLMを1回だけ実行</h2>
+<button id="runModel" disabled>117MBモデルで短文生成を試す（1回限り）</button>
+<p class="muted"><small>①に成功すると押せます。iPhone Safariで行い、途中で白画面になったら再実行しないでください。</small></p>
+</div>
+<div class="card">
+<h2>進捗・記録</h2>
+<div id="status">未実行です。</div>
+<pre id="output">以前の保存ログがあればここに表示します。</pre>
+<button class="alt" id="copy" disabled>記録をコピー</button>
+<button class="alt" id="reload">保存済みの記録を表示</button>
+</div>
+</main>
+<script type="module">
+'use strict';
+const VERSION='v0.6.0-smollm135-probe';
+const EXPECTED_ORIGIN='https://yakyouoranami723-cmd.github.io';
+const EXPECTED_PATH='/trial0-device-probe/';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX';
+const DTYPE='q4f16',DEVICE='webgpu',TRANSFORMERS_JS='4.3.2';
+const MODEL_CACHE='trial0-smollm135-v060';
+const TEST_CACHE='trial0-probe-small-cache-v060';
+const LOG_KEY='trial0-smollm135-probe-v060-report';
+const ATTEMPT_KEY='trial0-smollm135-probe-v060-started';
+const $=x=>document.getElementById(x);
+let report={version:VERSION,status:'not_started'}, events=[], cacheTestPassed=false,busy=false;
+function message(x){$('status').textContent=x;}
+function saved(){return {report,events};}
+function render(){$('output').textContent=JSON.stringify(saved(),null,2);$('copy').disabled=false;}
+function save(kind,details={}){
+  events.push({at:new Date().toISOString(),kind,...details});
+  events=events.slice(-55);
+  try{localStorage.setItem(LOG_KEY,JSON.stringify(saved()));}catch{}
+  render();
+}
+function errorInfo(e){return {name:String(e?.name||'Error'),message:String(e?.message||e||'unknown').slice(0,1200)};}
+function readSaved(){
+  try{const value=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(value){report=value.report||report;events=Array.isArray(value.events)?value.events:[];}}catch{}
+  render();
+  if(localStorage.getItem(ATTEMPT_KEY)){
+    $('runModel').disabled=true;
+    message('このページのモデル試行は既に開始済みです。もう実行せず保存ログを送ってください。');
+  }
+}
+const correctOrigin=location.origin===EXPECTED_ORIGIN&&location.pathname.startsWith(EXPECTED_PATH);
+if(!correctOrigin){
+  $('cacheTest').disabled=true;$('runModel').disabled=true;
+  message('実行不可：前回と同じGitHub Pagesのドメインから開いてください。ローカルファイルでは正しく検証できません。');
+  report={version:VERSION,status:'wrong_origin',origin:location.origin,path:location.pathname};render();
+}else{readSaved();}
+$('reload').addEventListener('click',()=>{readSaved();});
+$('copy').addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText(JSON.stringify(saved(),null,2));message('記録をコピーしました。');}
+  catch(e){message('自動コピーできませんでした。JSONを長押ししてコピーしてください。');}
+});
+$('cacheTest').addEventListener('click',async()=>{
+  if(!correctOrigin||busy)return;
+  busy=true;$('cacheTest').disabled=true;
+  message('小容量のキャッシュを確認中…');
+  if(!report||report.status==='not_started') report={version:VERSION,status:'cache_test',origin:location.origin,pagePath:location.pathname};
+  const url=new URL('trial0-cache-probe-v060-test-object',location.href).href;
+  try{
+    if(!globalThis.caches)throw Error('Cache APIが使用できません');
+    const c=await caches.open(TEST_CACHE);
+    try{
+      const payload='TrialZero-v060-cache-self-test';
+      await c.put(url,new Response(payload,{headers:{'Content-Type':'text/plain'}}));
+      const resp=await c.match(url);
+      const actual=resp?await resp.text():null;
+      if(actual!==payload)throw Error('保存データと読み出しデータが一致しません');
+      cacheTestPassed=true;
+      report.cacheTest={passed:true,bytes:payload.length};
+      save('cache_self_test_success');
+      message('小容量キャッシュの保存と読み取りに成功しました。');
+    }finally{try{await c.delete(url);await caches.delete(TEST_CACHE);}catch(e){save('cache_test_cleanup_error',{error:errorInfo(e)});}}
+  }catch(e){report.cacheTest={passed:false,error:errorInfo(e)};save('cache_self_test_failed',{error:errorInfo(e)});message('キャッシュテストが失敗しました。モデルを起動せず記録を送ってください。');}
+  finally{busy=false;$('cacheTest').disabled=false;$('runModel').disabled=!cacheTestPassed||!!localStorage.getItem(ATTEMPT_KEY);}
+});
+$('runModel').addEventListener('click',async()=>{
+  if(!correctOrigin||!cacheTestPassed||busy||localStorage.getItem(ATTEMPT_KEY))return;
+  busy=true;
+  // A one-attempt lock, written before loading the 117MB model.
+  localStorage.setItem(ATTEMPT_KEY,new Date().toISOString());
+  $('runModel').disabled=true;$('cacheTest').disabled=true;
+  report={version:VERSION,status:'starting',startedAt:new Date().toISOString(),origin:location.origin,
+    model:MODEL,dtype:DTYPE,device:DEVICE,transformersJs:TRANSFORMERS_JS,cacheKey:MODEL_CACHE,
+    generationAttempted:false,cacheTestPassed:true,webgpuAvailable:!!navigator.gpu};
+  events=[];save('model_attempt_started');
+  try{
+    if(!navigator.gpu)throw Error('WebGPUがありません');
+    if(!navigator.onLine)throw Error('初回のモデル取得にはネット接続が必要です');
+    message('Transformers.jsの読み込み中…');
+    const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+    m.env.useBrowserCache=true;
+    m.env.useWasmCache=true;
+    m.env.cacheKey=MODEL_CACHE;
+    m.env.allowRemoteModels=true;
+    save('runtime_ready',{version:m.env.version||TRANSFORMERS_JS});
+    if(typeof m.ModelRegistry?.is_pipeline_cached_files==='function'){
+      try{report.cacheBefore=await m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});save('cache_before_checked');}
+      catch(e){save('cache_before_error',{error:errorInfo(e)});}
+    }
+    report.status='initializing';save('pipeline_initialization_started');
+    message('モデル取得・初期化中…（モデル本体は約117MB）');
+    const milestones=new Map();
+    const generator=await m.pipeline('text-generation',MODEL,{device:DEVICE,dtype:DTYPE,
+      progress_callback(info){
+        if(!info||typeof info!=='object')return;
+        const file=info.file?String(info.file).split('/').pop():null;
+        const status=String(info.status||'');
+        if(status==='initiate'||status==='done'||status==='ready')save('file_status',{file,status});
+        const p=Number(info.progress);
+        if(Number.isFinite(p)&&file&&file.endsWith('.onnx')){
+          const mark=Math.min(100,Math.floor(p/20)*20);
+          const prev=milestones.get(file)??-20;
+          if(mark>prev||p>=100){milestones.set(file,mark);save('model_progress',{file,percent:Math.round(p)});}
+          message('小型モデルの準備：'+Math.round(p)+'%');
+        }
+      }
+    });
+    report.status='pipeline_ready';save('pipeline_ready');
+    message('モデル初期化に成功。短文生成中…');
+    report.generationAttempted=true;save('generation_started');
+    const output=await generator([{role:'user',content:'Say hello in one short English sentence.'}],{max_new_tokens:16,do_sample:false});
+    const generated=output?.[0]?.generated_text;
+    report.answer=Array.isArray(generated)?String(generated.at(-1)?.content??JSON.stringify(generated)):String(generated??JSON.stringify(output));
+    report.status='success';report.generatedAt=new Date().toISOString();save('generation_success',{answer:report.answer});
+    message('成功：小型AIがiPhone内で短文を生成しました。');
+    try{if(typeof generator.dispose==='function')await generator.dispose();}catch(e){save('dispose_error',{error:errorInfo(e)});}
+    if(typeof m.ModelRegistry?.is_pipeline_cached_files==='function'){
+      try{report.cacheAfter=await m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});save('cache_after_checked');}
+      catch(e){save('cache_after_error',{error:errorInfo(e)});}
+    }
+  }catch(e){report.status='error';report.error=errorInfo(e);save('model_error',{error:report.error});message('エラー：'+report.error.message);}
+  finally{report.completedAt=new Date().toISOString();save('finished');busy=false;$('cacheTest').disabled=false;}
+});
+window.addEventListener('pagehide',()=>{if(busy)save('pagehide',{stage:report.status});});
+</script>
+</body>
+</html>
