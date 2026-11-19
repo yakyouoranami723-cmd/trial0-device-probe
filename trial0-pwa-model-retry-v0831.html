@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a1722">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trial Zero AI">
+<title>Trial Zero v0.8.3.1 | PWAモデル通信再試行</title>
+<style>
+:root{color-scheme:dark;--bg:#0a1722;--panel:#172a38;--line:#3b5869;--text:#eef8fa;--muted:#bad0d7;--good:#98ebcd;--warn:#ffdda2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 system-ui,-apple-system,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}main{max-width:690px;margin:20px auto 44px}h1{font-size:clamp(23px,6vw,30px);line-height:1.3;margin:4px 0 10px}h2{font-size:17px;margin:0 0 10px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:var(--good)}.muted,.fine{color:var(--muted)}.fine{font-size:12px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px;margin:14px 0}.warning{background:#2b281e;border-color:#81714d}button{width:100%;min-height:49px;padding:12px;margin:6px 0;color:white;background:#17685f;border:1px solid #74cabb;border-radius:10px;font:700 15px system-ui}button.secondary{background:#294456;border-color:#7897a5}button:disabled{opacity:.43}.line{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);align-items:start}.line:last-child{border:0}.line strong{max-width:65%;text-align:right;overflow-wrap:anywhere}input[type=checkbox]{width:20px;height:20px;vertical-align:middle;accent-color:#3ca68b}.check{display:flex;gap:10px;align-items:start;padding:12px 0}.check span{flex:1}pre{max-height:420px;overflow:auto;background:#0b1927;border:1px solid var(--line);border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;font:12px/1.55 ui-monospace,monospace}.status{color:var(--warn);min-height:24px;overflow-wrap:anywhere}code{color:#c4eee1}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO · PWA CACHE RETRY</div>
+<h1>117MBモデルの通信再試行 <small style="font-size:13px;color:var(--muted)">v0.8.3.1</small></h1>
+<p class="muted">v0.8.3でWi-Fi切断によって取得に失敗した可能性があるため、<strong>同じPWAと同じモデルキャッシュ</strong>を使い、ONNXモデルだけを手動で1回再試行する診断版です。AI起動・推論なし。</p>
+<section class="warning"><h2>最初に確認</h2><p>以前使った<strong>同じホーム画面アイコン</strong>から開いてください。Safariタブや新しく追加した別のアイコンでは保存先が変わる場合があります。</p><p>モデルの取得は約117MB。iPhoneの画面で<strong>Wi-Fiに接続されていること</strong>を確認してください。ページ側ではWi-Fiと4Gを確実に判別できません。再取得はユーザーがボタンを押したときだけです。</p><p class="fine">v0.8.3の小ファイル4点と旧ログ・モデルキャッシュは削除も初期化もしません。成功・失敗を問わず、この版の再試行ボタンは1回限りです。</p></section>
+<section><h2>① 既存の保存状態を確認</h2>
+<button id="inspect">PWA・既存キャッシュを確認（モデル取得なし）</button>
+<div class="line"><span>起動環境</span><strong id="mode">未確認</strong></div>
+<div class="line"><span>v0.8.3の保管先識別子</span><strong id="idValue">未確認</strong></div>
+<div class="line"><span>小ファイル4点</span><strong id="small">未確認</strong></div>
+<div class="line"><span>ONNXモデル本体</span><strong id="large">未確認</strong></div>
+<div id="status" class="status" role="status">まだ診断していません。</div></section>
+<section><h2>② 通信を1回だけ再試行</h2>
+<label class="check"><input type="checkbox" id="wifi"><span>iPhoneの表示でWi-Fiに接続していることを確認した（モバイル通信で117MBを使いたくない）</span></label>
+<button id="retry" disabled>未保存のONNXモデルだけ再取得・保存</button>
+<div class="line"><span>現在の段階</span><strong id="step">未実施</strong></div>
+<p class="fine">通信が完了してからCache Storageへ保存します。進捗率は表示しません。途中で失敗した場合は自動でやり直しません。画面を開いたままで実行してください。</p></section>
+<section><h2>③ 保存結果を確認</h2>
+<button class="secondary" id="verify">Transformers.jsによる全5ファイル照合（取得なし）</button>
+<div class="line"><span>認識結果</span><strong id="result">未確認</strong></div>
+<p class="fine">5ファイル認識は保存確認であり、モデルのハッシュ検証・AI推論・完全オフライン動作の合格ではありません。</p></section>
+<section><h2>④ 診断記録</h2><button class="secondary" id="copy">JSONをコピー</button><pre id="log">記録はここに表示されます。</pre></section>
+</main>
+<script type="module">
+'use strict';
+const VERSION='v0.8.3.1-pwa-model-retry';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX';
+const MODEL_FILE='onnx/model_q4f16.onnx';
+const CACHE_KEY='trial0-smollm135-v060';
+const DEVICE='wasm',DTYPE='q4f16';
+const APP_KEY='trial0-v083-canonical-pwa';
+const LOG_KEY='trial0-v0831-manual-retry-log';
+const ATTEMPT_KEY='trial0-v0831-model-retry-attempt';
+const ORIGIN='https://yakyouoranami723-cmd.github.io',ROOT='/trial0-device-probe/';
+const SMALL=['config.json','generation_config.json','tokenizer.json','tokenizer_config.json'];
+const $=id=>document.getElementById(id);
+const siteOK=location.origin===ORIGIN&&location.pathname.startsWith(ROOT);
+const isPwa=()=>navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
+let busy=false,inspected=false,ready=false,lib=null;
+let report={version:VERSION,status:'idle',model:MODEL,modelFile:MODEL_FILE,device:DEVICE,dtype:DTYPE,cacheKey:CACHE_KEY,inferenceAttempted:false,automaticRetry:false};
+let events=[];
+function now(){return new Date().toISOString();}
+function errorInfo(e){return {name:String(e?.name||'Error'),message:String(e?.message||e||'unknown').slice(0,1400)};}
+function appMarker(){try{const x=JSON.parse(localStorage.getItem(APP_KEY)||'null');return x?.version==='v0.8.3-pwa-model-cache-only'&&typeof x?.id==='string'&&x.id.length>0?x:null;}catch{return null;}}
+function display(){ $('log').textContent=JSON.stringify({report,events},null,2); }
+function persist(){try{localStorage.setItem(LOG_KEY,JSON.stringify({report,events}));}catch{}display();}
+function event(name,details={}){events.push({at:now(),name,...details});events=events.slice(-70);persist();}
+function say(s){$('status').textContent=s;}
+function setStep(s){$('step').textContent=s;}
+function refresh(){
+ const lock=!!localStorage.getItem(ATTEMPT_KEY);
+ $('inspect').disabled=busy||!siteOK;
+ $('wifi').disabled=busy;
+ $('retry').disabled=busy||!siteOK||!isPwa()||!appMarker()||!inspected||!ready||lock||!$('wifi').checked;
+ $('verify').disabled=busy||!siteOK;
+ if(lock&&!busy&&report.status==='idle')setStep('この版の再試行履歴あり。自動再試行しません');
+}
+async function library(){
+ if(lib)return lib;
+ const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+ m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=CACHE_KEY;
+ m.env.allowLocalModels=false;m.env.allowRemoteModels=true;
+ if(typeof m.ModelRegistry?.is_pipeline_cached_files!=='function')throw new Error('ModelRegistryのキャッシュ照合APIがありません。');
+ lib=m;return lib;
+}
+async function cacheStatus(){const m=await library();return m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});}
+function summarizeCache(x){const files=Array.isArray(x?.files)?x.files:[];const small=SMALL.filter(file=>files.some(f=>f.file===file&&f.cached===true)).length;const large=files.some(f=>f.file===MODEL_FILE&&f.cached===true);return {small,large,allCached:x?.allCached===true,files};}
+async function storage(){try{const x=await navigator.storage.estimate();return {usageBytes:x.usage??null,quotaBytes:x.quota??null};}catch(e){return {error:errorInfo(e)};}}
+function redrawCache(c){$('small').textContent=c.small+'/4 認識';$('large').textContent=c.large?'キャッシュ認識あり':'未保存';$('result').textContent=c.allCached?'5/5 認識':'未完了';}
+function restore(){
+ try{const x=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(x){report=x.report||report;events=Array.isArray(x.events)?x.events:[];}}catch{}
+ $('mode').textContent=isPwa()?'ホーム画面アプリ':'Safari等（再取得禁止）';
+ $('idValue').textContent=appMarker()?.id||'v0.8.3の目印なし（別PWAの可能性）';
+ if(report.lastCache)redrawCache(summarizeCache(report.lastCache));
+ if(report.status==='fetching'||report.status==='cache_put')setStep('通信中にページが中断された可能性。再試行なし');
+ else if(report.status==='success')setStep('保存・照合成功');
+ else if(report.status==='retry_error')setStep('再試行失敗（再ダウンロードなし）');
+ else if(localStorage.getItem(ATTEMPT_KEY))setStep('再試行履歴あり（追加取得なし）');
+ display();refresh();
+}
+async function inspect(){
+ if(busy||!siteOK)return;
+ busy=true;refresh();inspected=false;ready=false;say('既存キャッシュを照合中…');
+ report.checkedAt=now();
+ try{
+  report.environment={mode:isPwa()?'standalone_pwa':'browser',appleStandalone:navigator.standalone===true};
+  const marker=appMarker();report.appId=marker?.id||null;
+  $('mode').textContent=isPwa()?'ホーム画面アプリ':'Safari等（再取得禁止）';
+  $('idValue').textContent=marker?.id||'v0.8.3の目印なし（別PWAの可能性）';
+  if(!isPwa()||!marker)throw new Error('以前のv0.8.3と同じPWAではありません。同じホーム画面アイコンから開いてください。');
+  report.storageBefore=await storage();
+  const x=await cacheStatus();report.lastCache=x;const c=summarizeCache(x);redrawCache(c);
+  inspected=true;ready=(c.small===4&&!c.large);
+  report.status=c.allCached?'already_cached':ready?'ready_to_retry':'preflight_incomplete';
+  event('preflight',{smallCached:c.small,modelCached:c.large,appId:marker.id});
+  say(c.allCached?'5ファイル認識済み。再ダウンロード不要です。':ready?'小ファイル4点確認済み。Wi-Fi確認後にモデルだけ再取得できます。':'必要な小ファイルが揃っていません。再取得しません。');
+ }catch(e){report.status='preflight_error';report.error=errorInfo(e);event('preflight_error',{error:report.error});say('確認を中止しました。診断記録を参照してください。');}
+ finally{busy=false;refresh();}
+}
+async function verify(){
+ if(busy||!siteOK)return;busy=true;refresh();say('5ファイルの認識を照合中…');
+ try{const x=await cacheStatus();report.lastCache=x;const c=summarizeCache(x);redrawCache(c);event('manual_verify',{smallCached:c.small,modelCached:c.large,allCached:c.allCached});say(c.allCached?'全5ファイルを認識しました。推論は未実施。':'モデルキャッシュの認識は未完了です。');}
+ catch(e){report.verifyError=errorInfo(e);event('verify_error',{error:report.verifyError});say('照合エラー。JSONを送ってください。');}
+ finally{busy=false;refresh();}
+}
+async function retry(){
+ if(busy||!siteOK||!isPwa()||!appMarker()||!inspected||!ready||!$('wifi').checked||localStorage.getItem(ATTEMPT_KEY))return;
+ busy=true;refresh();let attempted=false;let t=0;
+ try{
+  const before=summarizeCache(await cacheStatus());
+  if(before.small!==4||before.large){
+   report.status='pre_retry_blocked';
+   event('pre_retry_blocked',{smallCached:before.small,modelCached:before.large});
+   say('直前のキャッシュ状態が変化したため、ダウンロードを中止しました。');
+   return;
+  }
+  // Only lock this revision once the preflight has passed and the network attempt begins.
+  localStorage.setItem(ATTEMPT_KEY,now());attempted=true;
+  report.retryStartedAt=now();report.status='fetching';
+  event('retry_started',{appId:appMarker().id});
+  setStep('モデル通信を開始');say('Wi-Fiでモデルを取得中。画面を開いたままにしてください。');refresh();
+  const url=`https://huggingface.co/${MODEL}/resolve/main/${MODEL_FILE}`;
+  t=performance.now();
+  event('fetch_started',{file:MODEL_FILE});
+  const response=await fetch(url,{method:'GET',mode:'cors',redirect:'follow',cache:'no-store'});
+  const len=response.headers.get('content-length');
+  if(!response.ok||response.status!==200||response.type==='opaque'||!response.body)throw new Error('応答に問題: HTTP '+response.status+' / '+response.type);
+  if(len!==null){const n=Number(len);if(!Number.isFinite(n)||n<90000000||n>150000000)throw new Error('想定外のファイルサイズ: '+len);}
+  report.response={httpStatus:response.status,contentLength:len,contentType:response.headers.get('content-type')||null};
+  event('fetch_response',report.response);report.status='cache_put';setStep('モデルをCache Storageに保存中');say('通信レスポンス確認。モデルを端末に保存しています…');
+  const c=await caches.open(CACHE_KEY);
+  event('cache_put_started',{file:MODEL_FILE});
+  await c.put(url,response);
+  event('cache_put_finished',{file:MODEL_FILE});
+  report.status='verifying';setStep('全5ファイルを確認中');
+  const x=await cacheStatus();report.lastCache=x;const v=summarizeCache(x);redrawCache(v);
+  report.status=v.allCached?'success':'cache_mismatch';
+  event('final_verify',{smallCached:v.small,modelCached:v.large,allCached:v.allCached});
+  say(v.allCached?'成功！モデルを含む全5ファイルが認識されました。':'保存処理は完了しましたが、全5ファイル認識には至りません。');
+  setStep(v.allCached?'保存・照合成功':'保存後の照合不一致');
+ }catch(e){
+  report.status=attempted?'retry_error':'pre_retry_error';
+  report.error=errorInfo(e);event(report.status,{error:report.error});
+  setStep(attempted?'通信または保存エラー（追加の自動再試行なし）':'通信前の確認エラー');
+  say(attempted?'再試行中にエラー。JSONを送ってください。':'事前確認でエラー。モデル通信は開始していません。');
+ }finally{
+  if(attempted){report.elapsedMs=Math.round(performance.now()-t);report.completedAt=now();report.storageAfter=await storage();event('finished',{status:report.status,elapsedMs:report.elapsedMs});}
+  busy=false;persist();refresh();
+ }
+}
+$('inspect').addEventListener('click',inspect);
+$('wifi').addEventListener('change',refresh);
+$('retry').addEventListener('click',retry);
+$('verify').addEventListener('click',verify);
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({report,events},null,2));say('JSONをコピーしました。');}catch{say('コピーできなければ下のJSONを長押ししてください。');}});
+window.addEventListener('pagehide',()=>{if(busy)event('pagehide',{status:report.status});});
+window.addEventListener('visibilitychange',()=>{if(busy&&document.visibilityState==='hidden')event('hidden',{status:report.status});});
+if(!siteOK){report.status='wrong_origin';report.origin=location.origin;}
+restore();
+</script>
+</body>
+</html>
