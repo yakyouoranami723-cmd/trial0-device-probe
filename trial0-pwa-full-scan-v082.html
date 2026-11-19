@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#102128"><meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="T0総合診断"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Trial Zero | PWA総合診断 v0.8.2</title>
+<style>
+:root{color-scheme:dark;--bg:#0b151c;--panel:#142631;--edge:#365967;--fg:#eef9fc;--muted:#acc5ce;--good:#8ce1bd;--warn:#ffd89b;--bad:#ffacaf;--mint:#7adfcd}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 95% 0%,#1b3541,transparent 48%),var(--bg);color:var(--fg);font:15px/1.65 -apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN',system-ui,sans-serif;padding:env(safe-area-inset-top) 15px env(safe-area-inset-bottom)}main{max-width:760px;margin:auto;padding:24px 0 55px}h1{font-size:clamp(23px,5.6vw,34px);line-height:1.25;margin:6px 0 9px}h2{font-size:17px;margin:0 0 9px}.eyebrow{font-size:11px;font-weight:800;letter-spacing:.14em;color:var(--mint)}.muted,.small{color:var(--muted)}.small{font-size:12px}section{border:1px solid var(--edge);border-radius:15px;background:var(--panel);padding:16px;margin:13px 0}.note{border-color:#6d6045;background:#25251e}button{display:block;width:100%;min-height:49px;background:#196659;border:1px solid #5ccbb3;border-radius:11px;padding:11px;color:#fff;font:700 15px system-ui;margin:9px 0}button.alt{background:#294556;border-color:#64889b}button:disabled{opacity:.4}.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat{border-radius:10px;background:#10212a;padding:12px}.stat strong{display:block;overflow-wrap:anywhere}.stat small{color:var(--muted)}.item{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:9px;padding:10px 0;border-bottom:1px solid #2e4853}.item:last-child{border-bottom:none}.item small{display:block;color:var(--muted);overflow-wrap:anywhere}.pill{font-size:11px;border-radius:9px;padding:4px 8px;color:var(--muted);background:#33444e;white-space:nowrap}.pill.pass{color:#b8ffe0;background:#194537}.pill.fail{color:#ffb8c0;background:#58323a}.pill.skip{color:#ffdfa2;background:#59472e}.pill.info{color:#bde5ff;background:#234457}.status{min-height:25px;color:var(--warn)}pre{overflow:auto;max-height:470px;white-space:pre-wrap;overflow-wrap:anywhere;background:#08141c;padding:12px;border:1px solid #2b4a55;border-radius:9px;font:11.5px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}a{color:var(--mint)}ol{padding-left:21px}li{margin:6px 0}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO / SAFE PWA SWEEP</div>
+<h1>PWA総合診断 <span style="font-size:13px;vertical-align:middle;color:var(--mint)">v0.8.2</span></h1>
+<p class="muted">Safari / ホーム画面アプリの違いと、端末内AIに必要なWeb機能を<strong>一度の検査</strong>で確認します。前回のv0.8.1と同じモデルには触れません。</p>
+<section class="note"><h2>検査で変更する範囲</h2>
+<p>モデルの取得・推論は<strong>行いません</strong>。数十バイトのテストデータを専用名のlocalStorage、IndexedDB、Cache Storage、OPFSに一時保存し、検査後に削除します。暗号化・WASM・WebGPUはごく小さな計算のみです。</p>
+<p class="small">Service Workerは本診断専用の <code>trial0-v082-isolated/</code> という範囲にのみ登録します。既存の <code>sw.js</code>、117MBモデル、v0.8.0の会話ログには触れません。推論環境の再現性や完全オフライン利用を保証するものではありません。</p></section>
+<section>
+<h2>① 総合検査</h2>
+<div class="stats"><div class="stat"><small>実行モード</small><strong id="mode">未検査</strong></div><div class="stat"><small>モデルキャッシュ</small><strong id="cached">未検査</strong></div><div class="stat"><small>成功 / 失敗 / 参考・対象外</small><strong id="count">–</strong></div><div class="stat"><small>診断済み項目</small><strong id="progress">0 / 0</strong></div></div>
+<button id="run">安全な総合検査を一括実行</button>
+<div class="status" id="status" role="status" aria-live="polite">まだ検査していません。</div>
+<div id="results"></div>
+</section>
+<section><h2>② 再読み込み耐性の追加検査</h2>
+<p class="small">総合検査の結果を保存した後、このボタンで<strong>意図的に一度だけ</strong>ページを再読み込みし、診断記録が端末内に残るか検証します。AIモデルは起動しません。</p>
+<button id="reload" class="alt">記録を保持できるか再読み込みで検証</button><div id="recovery" class="small">未実行</div>
+</section>
+<section><h2>③ 診断ログ</h2>
+<button id="copy" class="alt" disabled>結果JSONをコピー</button><pre id="json">検査結果がここに表示されます。</pre>
+<p class="small">個人情報や入力会話は収集しません。ログにはブラウザー機能・キャッシュ名・時刻・検査結果が含まれます。再読み込み対策として専用localStorageキーに診断結果のみ保存します。</p></section>
+<section><h2>推奨する進め方</h2>
+<ol><li>ホーム画面の<strong>既存の「T0 PWA診断」</strong>を開き、下部の「v0.8.2 総合診断を開く」を押す。</li><li>このページの実行モードが <strong>standalone_pwa</strong> であることを確認し、総合検査を実行して結果を送る。</li><li>必要なら②の再読み込み検査も行い、復元結果を送る。</li><li>Safari側と比較したいときだけ、Safariでも同じページを開いて実行。</li></ol>
+<p class="small">今回は既存の「T0 PWA診断」（v0.8.1）の画面に追加したリンクから開いてください。新しいホーム画面アイコンを作る必要はありません。遷移後も「standalone_pwa」なら同じアプリ環境で検査できます。既存アプリやSafariのWebサイトデータは削除しないでください。</p></section>
+</main><script>
+(()=>{'use strict';
+const VERSION='v0.8.2-pwa-comprehensive-safe';
+const EXPECT_ORIGIN='https://yakyouoranami723-cmd.github.io';
+const PROJECT='/trial0-device-probe/';
+const MODEL_CACHE='trial0-smollm135-v060';
+const FILES=['config.json','onnx/model_q4f16.onnx','generation_config.json','tokenizer.json','tokenizer_config.json'];
+const SW_SCRIPT='./trial0-v082-isolated-sw.js', SW_SCOPE='./trial0-v082-isolated/';
+const LOG_KEY='trial0-v082-safe-sweep-log',PROGRESS_KEY='trial0-v082-safe-sweep-progress',RELOAD_KEY='trial0-v082-reload-marker';
+const $=id=>document.getElementById(id);
+let running=false,latest=null;
+const originOkay=location.origin===EXPECT_ORIGIN && location.pathname.startsWith(PROJECT);
+const now=()=>new Date().toISOString();
+const errorText=e=>String(e?.name?e.name+': '+e.message:e?.message||e).slice(0,250);
+const wait=(ms)=>new Promise(r=>setTimeout(r,ms));
+const withTimeout=(promise,ms=9500)=>Promise.race([promise,new Promise((_,reject)=>setTimeout(()=>reject(new Error('timeout '+ms+'ms')),ms))]);
+function render(){ $('json').textContent=latest?JSON.stringify(latest,null,2):'結果はまだありません。';$('copy').disabled=!latest;const t=latest?.tests||[];let p=t.filter(x=>x.status==='pass').length,f=t.filter(x=>x.status==='fail').length,u=t.length-p-f;$('count').textContent=latest?`${p} / ${f} / ${u}`:'–';$('progress').textContent=latest?`${t.length} 件`:'0 件';$('mode').textContent=latest?.environment?.mode||'未検査';$('cached').textContent=latest?.modelCache?.cachePresent===true?'あり':latest?.modelCache?.cachePresent===false?'なし':'未検査';const root=$('results');root.textContent='';for(const x of t){const row=document.createElement('div');row.className='item';const a=document.createElement('div');const strong=document.createElement('strong');strong.textContent=x.label;const small=document.createElement('small');small.textContent=x.detail||x.error||'';a.append(strong,small);const pill=document.createElement('span');pill.className='pill '+(x.status==='pass'?'pass':x.status==='fail'?'fail':x.status==='skip'?'skip':'info');pill.textContent=({pass:'成功',fail:'失敗',skip:'対象外',info:'参考'})[x.status]||x.status;row.append(a,pill);root.appendChild(row);}}
+function save(){try{localStorage.setItem(LOG_KEY,JSON.stringify(latest));}catch{}render();}
+function add(id,label,status,detail,extras={}){latest.tests.push({id,label,status,detail,...extras});latest.updatedAt=now();save();}
+function status(s){$('status').textContent=s;}
+function mode(){const a=navigator.standalone===true,m=typeof matchMedia==='function'&&matchMedia('(display-mode: standalone)').matches;return {appleStandalone:a,mediaStandalone:m,mode:a||m?'standalone_pwa':'browser_tab_or_other',userAgentHint:/iPhone|iPad/i.test(navigator.userAgent)?'iOS-like':'other'};}
+async function timedTest(id,label,task){status('検査中：'+label);try{const result=await withTimeout(task(),12000);add(id,label,result.status||'pass',result.detail||'OK',result.data?{data:result.data}:{});}catch(e){add(id,label,'fail',errorText(e),{error:errorText(e)});}}
+function b64(s){return new TextEncoder().encode(s);}
+async function checkModel(){const names=await caches.keys();const present=names.includes(MODEL_CACHE);let visible=[];let entries=0;if(present){const c=await caches.open(MODEL_CACHE);const keys=await c.keys();entries=keys.length;visible=FILES.map(name=>({name,visible:keys.some(req=>{try{return decodeURIComponent(new URL(req.url).pathname).endsWith('/'+name);}catch{return false;}})}));}
+latest.modelCache={cachePresent:present,cacheName:MODEL_CACHE,entryCount:entries,fileNames:visible,otherTrial0Caches:names.filter(n=>n.startsWith('trial0-')&&n!==MODEL_CACHE).slice(0,12)};
+return{status:'info',detail:present?`キャッシュ名あり／対象ファイル名 ${visible.filter(x=>x.visible).length}/5`:'この環境にはモデルキャッシュなし'};}
+async function localTest(){const key='trial0-v082-temporary-value';const val='safe-probe-'+VERSION;try{localStorage.setItem(key,val);if(localStorage.getItem(key)!==val)throw Error('readback mismatch');return{detail:'テスト値の書き込み・読み取り成功'};}finally{try{localStorage.removeItem(key);}catch{}}}
+function idbRequest(req){return new Promise((resolve,reject)=>{req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||Error('IDB request failed'));});}
+async function idbTest(){if(!('indexedDB' in window))return{status:'skip',detail:'IndexedDBなし'};const dbname='trial0-v082-probe-db';let db=null;try{const request=indexedDB.open(dbname,1);request.onupgradeneeded=()=>{request.result.createObjectStore('probe');};db=await idbRequest(request);const tx=db.transaction('probe','readwrite');await idbRequest(tx.objectStore('probe').put('ok-082','value'));const got=await idbRequest(db.transaction('probe','readonly').objectStore('probe').get('value'));if(got!=='ok-082')throw Error('IDB mismatch');return{detail:'作成 → 書き込み → 読み込み成功'};}finally{try{db?.close();}catch{}try{await withTimeout(idbRequest(indexedDB.deleteDatabase(dbname)),4500);}catch{}}}
+async function cacheTest(){if(!('caches' in window))return{status:'skip',detail:'Cache Storageなし'};const name='trial0-v082-probe-cache';const key=new Request(new URL('./trial0-v082-cache-only-key',location.href));try{const c=await caches.open(name);await c.put(key,new Response('CACHE-V082-OK',{headers:{'Content-Type':'text/plain'}}));const found=await c.match(key);if((await found?.text())!=='CACHE-V082-OK')throw Error('Cache mismatch');return{detail:'小容量のCache Storage書き込み・照合成功'};}finally{await caches.delete(name).catch(()=>{});}}
+async function opfsTest(){if(typeof navigator.storage?.getDirectory!=='function')return{status:'skip',detail:'OPFS APIなし'};const name='trial0-v082-probe.txt';let root=null;try{root=await navigator.storage.getDirectory();const handle=await root.getFileHandle(name,{create:true});const writer=await handle.createWritable();await writer.write('OPFS-V082-OK');await writer.close();const file=await handle.getFile();if(await file.text()!=='OPFS-V082-OK')throw Error('OPFS mismatch');return{detail:'OPFS書込・読込成功（16バイト未満）'};}finally{try{await root?.removeEntry(name);}catch{}}}
+async function cryptoTest(){if(!crypto?.subtle)return{status:'skip',detail:'Web Crypto subtleなし'};const v=b64('Trial Zero v0.8.2');const sha=await crypto.subtle.digest('SHA-256',v);if(sha.byteLength!==32)throw Error('sha failed');const k=await crypto.subtle.generateKey({name:'AES-GCM',length:128},false,['encrypt','decrypt']);const iv=crypto.getRandomValues(new Uint8Array(12));const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv},k,v);const recovered=await crypto.subtle.decrypt({name:'AES-GCM',iv},k,ciphertext);if(new TextDecoder().decode(recovered)!=='Trial Zero v0.8.2')throw Error('AES-GCM mismatch');return{detail:'SHA-256、AES-GCM暗号化・復号成功'};}
+async function wasmTest(){if(typeof WebAssembly==='undefined')return{status:'skip',detail:'WebAssemblyなし'};const bytes=new Uint8Array([0,97,115,109,1,0,0,0,1,5,1,96,0,1,127,3,2,1,0,7,8,1,4,109,97,105,110,0,0,10,6,1,4,0,65,42,11]);const out=await WebAssembly.instantiate(bytes);if(out.instance.exports.main()!==42)throw Error('WASM returned unexpected value');return{detail:'数十バイトのWASMで42を計算'};}
+async function gpuTest(){if(!navigator.gpu)return{status:'skip',detail:'WebGPUなし'};const adapter=await navigator.gpu.requestAdapter();if(!adapter)return{status:'skip',detail:'WebGPU adapterなし'};let device=null,out=null,readback=null;try{device=await adapter.requestDevice();const shader=device.createShaderModule({code:'@group(0) @binding(0) var<storage, read_write> values: array<u32>; @compute @workgroup_size(1) fn main() { values[0] = 6u * 7u; }'});out=device.createBuffer({size:4,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_SRC});readback=device.createBuffer({size:4,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});return await gpuCompute(device,shader,out,readback);}finally{try{readback?.destroy();out?.destroy();device?.destroy();}catch{}}}
+async function gpuCompute(device,shader,out,readback){const bindingLayout=device.createBindGroupLayout({entries:[{binding:0,visibility:GPUShaderStage.COMPUTE,buffer:{type:'storage'}}]});const layout=device.createPipelineLayout({bindGroupLayouts:[bindingLayout]});const pipeline=device.createComputePipeline({layout,compute:{module:shader,entryPoint:'main'}});const group=device.createBindGroup({layout:bindingLayout,entries:[{binding:0,resource:{buffer:out}}]});const encoder=device.createCommandEncoder();const pass=encoder.beginComputePass();pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.dispatchWorkgroups(1);pass.end();encoder.copyBufferToBuffer(out,0,readback,0,4);device.queue.submit([encoder.finish()]);await readback.mapAsync(GPUMapMode.READ);const n=new Uint32Array(readback.getMappedRange().slice(0))[0];readback.unmap();if(n!==42)throw Error('GPU expected 42, got '+n);return{detail:'4バイトのWebGPU計算成功（LLM動作とは別）'};}
+async function serviceWorkerTest(){if(!navigator.serviceWorker)return{status:'skip',detail:'Service Worker APIなし'};
+const url=new URL(SW_SCRIPT,location.href),scope=new URL(SW_SCOPE,location.href);
+const reg=await navigator.serviceWorker.register(url.href,{scope:scope.href});
+let worker=reg.active||reg.installing||reg.waiting;
+if(!worker)throw Error('登録後のworkerなし');
+if(worker.state!=='activated')await withTimeout(new Promise((resolve,reject)=>{const f=()=>{if(worker.state==='activated'){worker.removeEventListener('statechange',f);resolve();}if(worker.state==='redundant'){worker.removeEventListener('statechange',f);reject(Error('worker redundant'));}};worker.addEventListener('statechange',f);f();}),9000);
+worker=reg.active||worker;
+const channel=new MessageChannel();
+const reply=withTimeout(new Promise((resolve,reject)=>{channel.port1.onmessage=e=>{resolve(e.data);channel.port1.close();};channel.port1.onmessageerror=()=>reject(Error('message channel failed'));}),4000);
+worker.postMessage({type:'trial0-v082-ping'},[channel.port2]);
+const data=await reply;
+if(data?.mark!=='TRIAL0-V082-ISOLATED-SW')throw Error('SW ping invalid');
+latest.serviceWorkerIsolated={scope:reg.scope,activeState:worker.state,rootAppScopeUnmodified:true,responded:true};
+return{detail:'専用の狭いscopeで登録・起動・メッセージ応答成功'};}
+async function navTest(){if(!latest?.serviceWorkerIsolated?.responded)return{status:'skip',detail:'専用SW未確認のため省略'};
+const url=new URL('./trial0-v082-isolated/probe.html',location.href);const iframe=document.createElement('iframe');iframe.style.cssText='position:absolute;width:1px;height:1px;opacity:0;pointer-events:none';iframe.setAttribute('aria-hidden','true');
+try{const loaded=withTimeout(new Promise((resolve,reject)=>{iframe.onload=()=>{try{resolve(iframe.contentDocument?.getElementById('probe')?.textContent||'');}catch(e){reject(e);}};iframe.onerror=()=>reject(Error('iframe load error'));}),6500);iframe.src=url.href;document.body.appendChild(iframe);const content=await loaded;if(content!=='T0-SW-OK')throw Error('isolation navigation not intercepted ('+content.slice(0,30)+')');return{detail:'専用scope内だけのページ応答に成功'};}finally{iframe.remove();}}
+async function scan(){if(running)return;if(!originOkay){status('GitHub Pagesの正しいURLから開いてください。');return;}running=true;$('run').disabled=true;$('reload').disabled=true;
+latest={version:VERSION,startedAt:now(),origin:location.origin,pagePath:location.pathname,modelDownloaded:false,modelInferenceAttempted:false,notes:['モデルキャッシュは名前のみ照合','WebGPUの小計算成功はLLMのWebGPU推論成功を意味しない','SWは専用scopeのみ。現診断ページを制御しない','ストレージquotaは推定枠であり空きRAMや実際の空き容量ではない'],environment:mode(),storage:{},modelCache:{},serviceWorkerBefore:{},tests:[]};save();try{localStorage.setItem(PROGRESS_KEY,JSON.stringify({startedAt:latest.startedAt,phase:'running'}));}catch{}
+const run=async(id,label,fn)=>timedTest(id,label,fn);
+try{
+ await run('launch_mode','アプリ起動判定',async()=>({status:'info',detail:latest.environment.mode+' / appleStandalone='+latest.environment.appleStandalone}));
+ await run('storage_status','保存領域の利用状況',async()=>{const est=await navigator.storage?.estimate?.();const p=await navigator.storage?.persisted?.();latest.storage={usageBytes:est?.usage??null,quotaBytes:est?.quota??null,persisted:p??null};return{status:'info',detail:`使用量 ${est?.usage??'不明'} bytes / quota ${est?.quota??'不明'} bytes / persisted=${p??'不明'}`};});
+ await run('cache_readonly','既存モデルキャッシュ（一覧のみ）',async()=>('caches' in window)?checkModel():{status:'skip',detail:'Cache Storage非対応'});
+ await run('sw_baseline','既存Service Worker一覧（読み取り）',async()=>{if(!navigator.serviceWorker)return{status:'skip',detail:'Service Worker APIなし'};const regs=await navigator.serviceWorker.getRegistrations();latest.serviceWorkerBefore={count:regs.length,controller:!!navigator.serviceWorker.controller,scopes:regs.map(x=>x.scope).slice(0,8)};return{status:'info',detail:`登録${regs.length}件 / このページの制御=${!!navigator.serviceWorker.controller}`};});
+ await run('localstorage','localStorage読み書き',localTest);
+ await run('indexeddb','IndexedDB読み書き',idbTest);
+ await run('cache_write','Cache Storage読み書き',cacheTest);
+ await run('opfs','OPFSファイル読み書き',opfsTest);
+ await run('crypto','暗号化とハッシュ',cryptoTest);
+ await run('wasm','WebAssemblyの小さな計算',wasmTest);
+ await run('webgpu','WebGPUの小さな計算',gpuTest);
+ await run('sw_isolated','専用Service Workerの登録・応答',serviceWorkerTest);
+ await run('sw_navigation','専用Service Workerでのページ応答',navTest);
+ await run('app_features','追加Web機能（参考）',async()=>{latest.features={onLine:navigator.onLine,hardwareConcurrency:navigator.hardwareConcurrency??null,deviceMemory:navigator.deviceMemory??null,worker:typeof Worker==='function',sharedArrayBuffer:typeof SharedArrayBuffer!=='undefined',crossOriginIsolated:self.crossOriginIsolated===true,notificationPermission:('Notification' in window)?Notification.permission:null,fullscreen:document.fullscreenEnabled??null,storagePersistSupported:typeof navigator.storage?.persist==='function'};return{status:'info',detail:`Worker=${latest.features.worker} / SharedArrayBuffer=${latest.features.sharedArrayBuffer} / onlineFlag=${latest.features.onLine}`};});
+ latest.status='finished';latest.completedAt=now();status('総合診断完了。結果JSONをコピーできます。');
+ }finally{running=false;$('run').disabled=false;$('reload').disabled=false;try{localStorage.removeItem(PROGRESS_KEY);}catch{}save();}}
+$('run').addEventListener('click',()=>scan().catch(e=>{if(latest){latest.status='unexpected_error';latest.unexpectedError=errorText(e);save();}status('診断全体で例外が発生。JSONを送ってください。');running=false;$('run').disabled=false;$('reload').disabled=false;}));
+$('copy').addEventListener('click',async()=>{if(!latest)return;try{await navigator.clipboard.writeText(JSON.stringify(latest,null,2));status('JSONをコピーしました。');}catch{status('コピーできない場合は下のJSONを長押ししてコピーしてください。');}});
+$('reload').addEventListener('click',()=>{if(running)return;try{localStorage.setItem(RELOAD_KEY,JSON.stringify({startedAt:now(),version:VERSION}));location.reload();}catch(e){status('再読み込み検査を開始できません: '+errorText(e));}});
+function restore(){let saved=null;try{saved=JSON.parse(localStorage.getItem(LOG_KEY)||'null');}catch{}if(saved){latest=saved;render();status('以前の診断結果を端末内から復元しました。');}let r=null;try{r=JSON.parse(localStorage.getItem(RELOAD_KEY)||'null');}catch{}if(r){try{localStorage.removeItem(RELOAD_KEY);}catch{}$('recovery').textContent='再読み込み後の保存確認：成功（専用マーカーを復元）';if(latest){latest.reloadRecovery={success:true,markerCreatedAt:r.startedAt,confirmedAt:now()};save();}}else if(saved){$('recovery').textContent='保存済み結果を読み込み済み。意図的な再読み込み検査は未実施。';}
+let p=null;try{p=JSON.parse(localStorage.getItem(PROGRESS_KEY)||'null');}catch{}if(p){try{localStorage.removeItem(PROGRESS_KEY);}catch{}$('recovery').textContent+=' 前回検査は完了記録なし（ページ終了または中断の可能性）。';if(latest){latest.interruptedRun={detected:true,startedAt:p.startedAt,observedAt:now()};save();}}}
+function recordLifecycle(type,extra={}){if(!latest)return;latest.lifecycleEvents=(latest.lifecycleEvents||[]).concat([{at:now(),type,...extra}]).slice(-16);try{localStorage.setItem(LOG_KEY,JSON.stringify(latest));}catch{}}
+window.addEventListener('pagehide',e=>recordLifecycle('pagehide',{persisted:e.persisted===true}));
+document.addEventListener('visibilitychange',()=>recordLifecycle('visibilitychange',{visibility:document.visibilityState}));
+if(!originOkay)status('指定されたGitHub Pages上で開いてください。');restore();
+})();
+</script></body></html>
