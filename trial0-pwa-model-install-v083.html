@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a1722">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trial Zero AI">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Trial Zero v0.8.3 | PWAモデル保管テスト</title>
+<style>
+:root{color-scheme:dark;--bg:#0a1722;--panel:#172a38;--line:#3b5869;--text:#eef8fa;--sub:#bad0d7;--good:#98ebcd;--amber:#ffdda2;--red:#ffc2c2}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 -apple-system,system-ui,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}main{max-width:720px;margin:22px auto 45px}.eyebrow{color:var(--good);font-size:12px;font-weight:800;letter-spacing:.13em}h1{font-size:clamp(24px,6.4vw,32px);line-height:1.25;margin:7px 0}h2{font-size:18px;margin:0 0 9px}.sub,.small{color:var(--sub)}.small{font-size:12px}section{border:1px solid var(--line);background:var(--panel);padding:16px;border-radius:15px;margin:13px 0}.notice{background:#29261f;border-color:#8c7650}.ok{color:var(--good)}.warn{color:var(--amber)}.danger{color:var(--red)}button{display:block;width:100%;min-height:48px;margin:7px 0;padding:12px 14px;background:#17685f;color:white;border:1px solid #74cabb;border-radius:11px;font:700 15px system-ui}button.secondary{background:#2a4356;border-color:#68889a}button:disabled{opacity:.42}p{margin:7px 0 10px}ul{padding-left:20px;margin:9px 0}li{margin:5px 0}.key{font-weight:650}.datum{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--line)}.datum:last-child{border:0}.datum>span:last-child{text-align:right;max-width:64%;overflow-wrap:anywhere}.status{color:var(--amber);min-height:26px;overflow-wrap:anywhere}.meter{height:8px;border-radius:20px;background:#284454;overflow:hidden;margin:10px 0}.meter>div{height:100%;width:0%;background:#86e0c3;transition:width .2s}.tiny{font-size:12px;color:var(--sub)}pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;max-height:430px;background:#0e1b29;border:1px solid var(--line);border-radius:10px;padding:12px;font:12px/1.5 ui-monospace,monospace}input[type=text]{width:100%;min-height:44px;border:1px solid #7793a3;border-radius:8px;background:#091825;color:#fff;font:15px system-ui;padding:10px}a{color:var(--good)}code{overflow-wrap:anywhere}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO · PWA MODEL INSTALL / STAGE A</div>
+<h1>モデルをPWAに保存 <span class="tiny">v0.8.3</span></h1>
+<p class="sub">Safariで生成に成功したSmolLM2-135Mの <strong>q4f16 / 約117MB</strong> を、ホーム画面アプリ側に保存する専用検証。<strong>この版はAIの初期化・推論を一切しません。</strong></p>
+<section class="notice"><h2>重要な安全ルール</h2>
+<ul>
+<li>このPWAの保存領域にだけ書き込む。Safariのモデルキャッシュ・既存のGitHubファイル・Service Workerは変更しない。</li>
+<li>通信は明示ボタン操作時のみ。まず小さい4ファイルを検証し、<strong>合格した場合だけ117MBの保存ボタンを有効化</strong>。</li>
+<li>117MBの取得は通信量・空き容量が必要。Wi-Fiと十分な空き容量のある状態で実行すること。</li>
+<li>途中停止・エラーでは自動で再取得しない。データの削除・キャッシュ初期化もしない。</li>
+<li>このページから別のPWAを作り直すと保存領域が分かれる場合がある。<strong>今後も同じホーム画面アイコンを使用</strong>。</li>
+</ul>
+</section>
+<section>
+<h2>① 保存先のPWAを確認する（通信なし）</h2>
+<div class="datum"><span>起動方式</span><span id="mode">未確認</span></div>
+<div class="datum"><span>v0.8.1で作った目印</span><span id="marker">未確認</span></div>
+<div class="datum"><span>このアプリの保存済みモデル</span><span id="cached">未確認</span></div>
+<div class="datum"><span>ストレージの概算使用量</span><span id="storage">未確認</span></div>
+<div class="datum"><span>このインストールの識別子</span><span id="install">未設定</span></div>
+<button id="inspect">保存領域を確認する</button>
+<button id="approve" class="secondary" disabled>このホーム画面アプリを今後の保管先にする</button>
+<p class="small">Safariタブでは保存操作を許可しない。v0.8.1目印がなければ新しい独立PWAの可能性があるため、同じアイコンを今後使うことを確認してから進む。</p>
+</section>
+<section>
+<h2>② 小さい4ファイルで互換性を検証する</h2>
+<p class="sub">Transformers.js 4.3.2の正式なキャッシュ確認APIで、<code>config.json</code>などを正しく認識できるか調べる。推論なし。</p>
+<button id="small" disabled>小ファイル4点を1回だけ取得・確認</button>
+<div class="datum"><span>小ファイルの認識</span><span id="smallState">未実施</span></div>
+</section>
+<section>
+<h2>③ ONNXモデル約117MBを保存する</h2>
+<p>②が成功した場合だけ実行できる。<strong>保存中の進捗率は取得できない場合がある</strong>。端末の空きメモリを測定する機能ではない。</p>
+<button id="heavy" disabled>117MBモデルを1回だけ取得・保存</button>
+<div class="meter"><div id="bar"></div></div>
+<div class="datum"><span>大型モデル</span><span id="heavyState">未実施</span></div>
+<div class="datum"><span>経過時間</span><span id="elapsed">—</span></div>
+<p class="small">通信の取得開始・Cache Storageへの保存開始・完了をそれぞれ記録。大きなArrayBufferへ展開せず、レスポンスを直接Cache Storageへ渡す。</p>
+</section>
+<section>
+<h2>④ 保存完了の照合（ダウンロードなし）</h2>
+<button id="verify" class="secondary" disabled>Transformers.jsのキャッシュ認識を照合</button>
+<div class="datum"><span>認識結果</span><span id="verifyState">未検証</span></div>
+<p class="small">5ファイルがキャッシュ済みと認識されても、内容ハッシュ・モデルの推論・完全オフライン動作は未検証。次の版で別に試験する。</p>
+</section>
+<section><h2>診断記録</h2><button id="copy" class="secondary">JSONをコピー</button><button id="restore" class="secondary">保存済み記録を表示</button><pre id="log">まだ記録がありません。</pre></section>
+<section><h2>今後も同じPWAから開くための案内</h2><p class="small">以後の検証版も<strong>同じホーム画面アプリ内でリンクを開く</strong>必要がある。別のアイコンを作るとモデルが見つからない場合がある。</p><input type="text" id="nextFile" placeholder="後日：次のHTMLファイル名（trial0-...html）" autocomplete="off"><button class="secondary" id="navigate" disabled>同じPWA内で次の診断に移動</button><p class="small">移動は同一GitHub Pagesプロジェクト内の <code>trial0-*.html</code> のみ許可。未公開のファイルを入力しても開けない。</p></section>
+</main>
+<script type="module">
+'use strict';
+const VERSION='v0.8.3-pwa-model-cache-only';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX';
+const DTYPE='q4f16',DEVICE='wasm',LIB='4.3.2';
+const CACHE='trial0-smollm135-v060';
+const ORIGIN='https://yakyouoranami723-cmd.github.io',ROOT='/trial0-device-probe/';
+const SMALL=['config.json','generation_config.json','tokenizer.json','tokenizer_config.json'];
+const LARGE='onnx/model_q4f16.onnx',ALL=['config.json',LARGE,'generation_config.json','tokenizer.json','tokenizer_config.json'];
+const KEY='trial0-v083-cache-only-log',APP_KEY='trial0-v083-canonical-pwa',SMALL_ATTEMPT='trial0-v083-small-attempt',LARGE_ATTEMPT='trial0-v083-model-attempt';
+const OLD_MARKER='trial0-pwa-environment-v081-marker';
+const $=id=>document.getElementById(id);
+const siteOK=location.origin===ORIGIN&&location.pathname.startsWith(ROOT);
+const isPwa=()=>!!(navigator.standalone===true||matchMedia('(display-mode: standalone)').matches);
+let busy=false,inspected=false,approved=false,registry=null,library=null,cache=null;
+let report={version:VERSION,status:'not_started',model:MODEL,dtype:DTYPE,device:DEVICE,cacheKey:CACHE,downloadOnly:true,inferenceAttempted:false};let events=[];
+function stamp(){return new Date().toISOString();}
+function show(){ $('log').textContent=JSON.stringify({report,events},null,2); }
+function save(){try{localStorage.setItem(KEY,JSON.stringify({report,events}));}catch{}show();}
+function log(type,info={}){events.push({at:stamp(),type,...info});events=events.slice(-80);save();}
+function set(id,text){$(id).textContent=String(text);}
+function err(e){return{kind:String(e?.name||'Error'),message:String(e?.message||e||'unknown').slice(0,1200)};}
+function marked(){try{const x=JSON.parse(localStorage.getItem(OLD_MARKER)||'null');return x&&x.sourceMode==='standalone_pwa'?{createdAt:x.createdAt,sourceMode:x.sourceMode}:null;}catch{return null;}}
+function appMarker(){try{return JSON.parse(localStorage.getItem(APP_KEY)||'null');}catch{return null;}}
+function refresh(){
+ const p=isPwa(),smallDone=SMALL.every(x=>report.smallStatus?.files?.some(f=>f.file===x&&f.cached===true));
+ const heavyDone=!!report.verifyStatus?.allCached;
+ $('inspect').disabled=busy||!siteOK;
+ $('approve').disabled=busy||!siteOK||!p||!inspected||approved;
+ $('small').disabled=busy||!siteOK||!p||!approved||!!localStorage.getItem(SMALL_ATTEMPT)||heavyDone;
+ $('heavy').disabled=busy||!siteOK||!p||!approved||!smallDone||!!localStorage.getItem(LARGE_ATTEMPT)||heavyDone;
+ $('verify').disabled=busy||!siteOK||!p||!approved;
+ $('navigate').disabled=busy||!/^trial0-[a-z0-9-]+\.html$/i.test($('nextFile').value.trim());
+}
+function restore(){
+ try{const old=JSON.parse(localStorage.getItem(KEY)||'null');if(old){report=old.report||report;events=Array.isArray(old.events)?old.events:[];}}catch{}
+ approved=!!appMarker();
+ const m=marked();set('marker',m?'PWA側の目印あり':'見つからず（別PWAの可能性）');
+ set('mode',isPwa()?'ホーム画面アプリ':'Safariタブ等（取得不可）');
+ set('install',appMarker()?.id||'未設定');
+ if(report.smallStatus)set('smallState',report.smallStatus.allCached?'全ファイル認識済み':report.smallStatus.files?.filter(f=>SMALL.includes(f.file)&&f.cached).length+'/4 認識');
+ if(report.verifyStatus)set('verifyState',report.verifyStatus.allCached?'5/5 全ファイル認識':'不足ファイルあり');
+ if(report.heavyState)set('heavyState',report.heavyState);
+ if(report.status==='large_fetching'||report.status==='large_cache_put')set('heavyState','前回の大型保存は途中で中断された可能性。自動再試行しません。');
+ if(report.status==='small_fetching')set('smallState','前回の小ファイル取得が中断された可能性があります。');
+ show();refresh();
+}
+async function storageInfo(){try{const s=await navigator.storage.estimate();return {usageBytes:s.usage??null,quotaBytes:s.quota??null,persisted:await navigator.storage.persisted?.()??null};}catch(e){return{error:err(e)};}}
+function fileUrl(file){if(!ALL.includes(file))throw Error('許可されていないファイル');return `https://huggingface.co/${MODEL}/resolve/main/${file}`;}
+async function check(){
+ if(!library){const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=CACHE;m.env.allowLocalModels=false;m.env.allowRemoteModels=true;library=m;registry=m.ModelRegistry;}
+ if(typeof registry?.is_pipeline_cached_files!=='function'||typeof registry?.get_pipeline_files!=='function')throw Error('ModelRegistryのAPIが見つかりません');
+ const files=await registry.get_pipeline_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+ if(files.length!==ALL.length||!ALL.every(x=>files.includes(x)))throw Error('公式ファイル一覧が想定と異なります（大型モデルは取得しません）: '+JSON.stringify(files));
+ return registry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+}
+async function inspect(){
+ if(busy||!siteOK)return;busy=true;refresh();report.status='inspecting';report.checkedAt=stamp();
+ try{
+  report.environment={mode:isPwa()?'standalone_pwa':'browser',appleStandalone:navigator.standalone===true,markerFromV081:marked(),appMarker:appMarker()?.id||null};
+  report.storageBefore=await storageInfo();
+  const names=await caches.keys();report.cacheNames=names.filter(n=>n.startsWith('trial0-'));
+  report.exactCachePresent=names.includes(CACHE);
+  set('mode',isPwa()?'ホーム画面アプリ':'Safariタブ（保存操作不可）');
+  set('marker',marked()?'PWA側のv0.8.1目印あり':'目印なし（別PWAの可能性）');
+  set('cached',report.exactCachePresent?'キャッシュあり':'キャッシュなし');
+  set('storage',report.storageBefore.usageBytes==null?'取得不可':(report.storageBefore.usageBytes/1048576).toFixed(1)+' MiB');
+  inspected=true;report.status='inspected';log('inspection_done',{isPwa:isPwa(),exactCachePresent:report.exactCachePresent});
+ }catch(e){report.status='inspection_error';report.error=err(e);log('inspection_error',{error:report.error});}
+ finally{busy=false;refresh();}
+}
+async function saveFile(file){
+ const url=fileUrl(file);
+ if(!cache)cache=await caches.open(CACHE);
+ const existing=await cache.match(url);
+ if(existing){log('already_in_cache',{file});return {skipped:true};}
+ log('fetch_started',{file});
+ const response=await fetch(url,{method:'GET',mode:'cors',redirect:'follow',cache:'no-store'});
+ const type=response.type,receivedLength=response.headers.get('content-length');
+ if(!response.ok||response.status!==200||type==='opaque'||!response.body)throw Error(file+': HTTP '+response.status+' / type='+type+' / body='+!!response.body);
+ if(file===LARGE&&receivedLength!==null){
+  const bytes=Number(receivedLength);
+  if(!Number.isFinite(bytes)||bytes<90_000_000||bytes>150_000_000)throw Error('モデルサイズが想定外 '+receivedLength+' bytes。保存しません。');
+ }
+ log('fetch_response',{file,httpStatus:response.status,contentLength:receivedLength,contentType:response.headers.get('content-type')||null});
+ if(file===LARGE){report.status='large_cache_put';report.heavyState='117MB級のレスポンスを保存処理中';set('heavyState',report.heavyState);save();}
+ // Pass the Response stream directly to CacheStorage without arrayBuffer/blob and without a clone.
+ await cache.put(url,response);
+ log('cache_put_finished',{file,receivedLength});
+ return {stored:true,receivedLength};
+}
+async function smallRun(){
+ if(busy||!approved||!siteOK||!isPwa()||localStorage.getItem(SMALL_ATTEMPT))return;
+ busy=true;localStorage.setItem(SMALL_ATTEMPT,stamp());report.status='small_fetching';report.smallStartedAt=stamp();log('small_download_started');refresh();
+ try{
+  const before=await check();report.before=before;log('official_cache_before',{files:before.files,allCached:before.allCached});
+  for(const file of SMALL)await saveFile(file);
+  const after=await check();report.smallStatus=after;
+  const passed=SMALL.every(x=>after.files.some(f=>f.file===x&&f.cached===true));
+  report.status=passed?'small_verified':'small_cache_mismatch';
+  set('smallState',passed?'4/4 公式APIで認識（合格）':'不一致（大型は進めない）');
+  log('small_check',{passed,files:after.files});
+ }catch(e){report.status='small_error';report.smallError=err(e);log('small_error',{error:report.smallError});set('smallState','エラー。大型モデルは取得しない');}
+ finally{report.smallCompletedAt=stamp();busy=false;save();refresh();}
+}
+let interval=null,startClock=0;
+function clockStart(){startClock=performance.now();if(interval!==null)clearInterval(interval);interval=setInterval(()=>set('elapsed',Math.round((performance.now()-startClock)/1000)+'秒'),1000);}
+function clockStop(){if(interval!==null){clearInterval(interval);interval=null;}set('elapsed',Math.round((performance.now()-startClock)/1000)+'秒');}
+async function heavyRun(){
+ if(busy||!approved||!siteOK||!isPwa()||localStorage.getItem(LARGE_ATTEMPT))return;
+ if(!report.smallStatus?.files||!SMALL.every(x=>report.smallStatus.files.some(f=>f.file===x&&f.cached===true)))return;
+ busy=true;localStorage.setItem(LARGE_ATTEMPT,stamp());report.status='large_fetching';report.largeStartedAt=stamp();report.heavyState='開始済み';clockStart();log('large_download_started');refresh();
+ try{
+  const before=await check();if(!SMALL.every(x=>before.files.some(f=>f.file===x&&f.cached===true)))throw Error('直前の小ファイル照合が不合格');
+  const outcome=await saveFile(LARGE);report.largeDownload=outcome;log('large_cache_stored',{outcome});
+  report.status='verifying_cache';
+  const after=await check();report.verifyStatus=after;
+  report.heavyState=after.allCached?'モデルファイルを保存、全5ファイルを認識':'保存操作は完了、キャッシュ認識が不一致';
+  report.status=after.allCached?'cache_five_files_recognized':'cache_mismatch';
+  $('bar').style.width=after.allCached?'100%':'0%';
+  set('heavyState',report.heavyState);set('verifyState',after.allCached?'5/5 公式APIで認識':'不足ファイルあり');
+  log('verified_after_large',{allCached:after.allCached,files:after.files});
+ }catch(e){report.status='large_error';report.largeError=err(e);report.heavyState='保存エラー（再試行なし）';log('large_error',{error:report.largeError});set('heavyState',report.heavyState);}
+ finally{clockStop();report.largeCompletedAt=stamp();report.storageAfter=await storageInfo();busy=false;save();refresh();}
+}
+async function verify(){if(busy||!approved||!siteOK||!isPwa())return;busy=true;refresh();
+ try{const x=await check();report.verifyStatus=x;report.status=x.allCached?'cache_five_files_recognized':'cache_incomplete';set('verifyState',x.allCached?'全5ファイルを認識（推論未検証）':'不足ファイルあり');log('manual_verify',{allCached:x.allCached,files:x.files});}
+ catch(e){report.status='verify_error';report.verifyError=err(e);log('verify_error',{error:report.verifyError});set('verifyState','確認エラー');}
+ finally{busy=false;refresh();}
+}
+function approve(){if(busy||!inspected||!siteOK||!isPwa()||approved)return;
+ try{const id=crypto.randomUUID?crypto.randomUUID():'t0-'+Date.now().toString(36);const marker={version:VERSION,id,createdAt:stamp(),v081MarkerPresent:!!marked()};localStorage.setItem(APP_KEY,JSON.stringify(marker));approved=true;report.appMarker=marker;set('install',id);log('pwa_approved',{id,v081MarkerPresent:!!marked()});refresh();}catch(e){report.approvalError=err(e);log('approval_error',{error:report.approvalError});}
+}
+$('inspect').addEventListener('click',inspect);
+$('approve').addEventListener('click',approve);
+$('small').addEventListener('click',smallRun);
+$('heavy').addEventListener('click',heavyRun);
+$('verify').addEventListener('click',verify);
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({report,events},null,2));set('heavyState','記録をコピーしました');}catch{set('heavyState','コピー失敗。下のJSONを選択してコピー');}});
+$('restore').addEventListener('click',restore);
+$('nextFile').addEventListener('input',refresh);
+$('navigate').addEventListener('click',()=>{const file=$('nextFile').value.trim();if(!/^trial0-[a-z0-9-]+\.html$/i.test(file)||busy)return;location.assign(ORIGIN+ROOT+file);});
+window.addEventListener('pagehide',()=>{if(busy||report.status==='large_fetching'||report.status==='large_cache_put')log('pagehide',{status:report.status});});
+window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&busy)log('hidden',{status:report.status});});
+if(!siteOK){report.status='wrong_origin';report.origin=location.origin;report.path=location.pathname;}
+restore();
+</script>
+</body>
+</html>
