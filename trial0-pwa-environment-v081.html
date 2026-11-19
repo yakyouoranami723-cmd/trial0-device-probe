@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d1721">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="T0 PWA診断">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Trial Zero — Safari / PWA 環境診断 v0.8.1</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1721;--panel:#182735;--line:#3a5565;--txt:#eef5f7;--muted:#b9ced3;--mint:#91e4cf;--warn:#ffe0a1;--good:#b9ffdc}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.65 system-ui,-apple-system,"Hiragino Kaku Gothic ProN",sans-serif;padding:env(safe-area-inset-top) 13px env(safe-area-inset-bottom)}main{max-width:760px;margin:22px auto 44px}
+.eyebrow{font-size:11px;font-weight:800;letter-spacing:.13em;color:var(--mint)}h1{font-size:clamp(23px,5.5vw,31px);line-height:1.3;margin:6px 0 10px}h2{font-size:17px;margin:0 0 9px}.muted,.fine{color:var(--muted)}.fine{font-size:12px}section{background:var(--panel);padding:15px;border:1px solid var(--line);border-radius:14px;margin:13px 0}.notice{border-color:#827047;background:#2b281e}button{width:100%;min-height:48px;background:#176b5e;color:#fff;border:1px solid #66cbb4;border-radius:11px;padding:12px;font:700 15px system-ui;margin:5px 0}button.secondary{background:#2a4052;border-color:#62819a}button:disabled{opacity:.55}.pill{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;background:#293d4c;color:var(--muted)}.pill.ok{color:var(--good);background:#1a4039}.pill.warn{color:var(--warn);background:#51402b}
+.data{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #354653}.data:last-child{border:0}.data small{display:block;color:var(--muted);font-size:12px}.data strong{overflow-wrap:anywhere;text-align:right;max-width:190px}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:390px;overflow:auto;border:1px solid var(--line);background:#101a27;border-radius:10px;padding:11px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace}.status{min-height:25px;color:var(--warn)}ol{padding-left:23px}li{margin:8px 0}a{color:var(--mint);overflow-wrap:anywhere}code{color:#c2f1e6;overflow-wrap:anywhere}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO / ENVIRONMENT PROBE</div>
+<h1>Safari ⇄ PWA 環境診断 <span class="pill">v0.8.1</span></h1>
+<p class="muted">iPhone 16で、Safariとホーム画面アプリの実行環境・保存領域の違いを比較するための<strong>読み取り中心の診断</strong>です。</p>
+<section class="notice"><h2>今回AIは起動しません</h2>
+<p>モデルのダウンロード、Transformers.jsの読み込み、推論、WebGPU計算は一切行いません。モデルキャッシュの一覧を読み取るだけで、117MBのモデル本体は読み込みません。</p>
+<p class="fine">ページ取得の通信を除き、診断スクリプト自体はネットワークアクセスしません。キャッシュ・Service Worker・既存の会話ログは変更しません。保存テスト用の小さな目印だけは、専用ボタンを押した場合に限りlocalStorageへ書き込みます。</p></section>
+<section><h2>① この画面の実行環境</h2>
+<div id="mode" class="data"><span>起動方式<small>ボタンを押すと判定</small></span><strong>未確認</strong></div>
+<div id="model" class="data"><span>SmolLM2モデルキャッシュ<small>以前のv0.6.0からの保存領域</small></span><strong>未確認</strong></div>
+<div id="marker" class="data"><span>診断用の小さな目印<small>SafariとPWAの保存領域を比較</small></span><strong>未確認</strong></div>
+<div id="quota" class="data"><span>この環境のストレージ使用量<small>概算値・空きRAMではありません</small></span><strong>未確認</strong></div>
+<button id="run">① 環境とキャッシュを確認（読み取りのみ）</button>
+<div id="status" class="status" role="status" aria-live="polite">まだ診断していません。</div>
+</section>
+<section><h2>② SafariとPWAの保存領域を比較</h2>
+<p class="muted">まずSafariで「小さな目印を保存」を押し、その後ホーム画面アプリでこの診断を実行してください。PWA側に目印が見えない場合、別の保存領域で動いていることを確かめられます。</p>
+<button id="setMarker" class="secondary">目印を保存（約100文字以下）</button>
+<button id="clearMarker" class="secondary">この診断の目印だけを削除</button>
+<p class="fine">目印の保存・削除は明示的な操作時だけ実施。モデルキャッシュやv0.8.0のログは消しません。</p>
+</section>
+<section><h2>③ 結果をコピー</h2>
+<button id="copy" class="secondary" disabled>JSON診断結果をコピー</button>
+<pre id="json">診断後に表示されます。</pre>
+</section>
+<section><h2>検証手順</h2>
+<ol>
+<li>iPhoneの<strong>Safari</strong>でこのページを開き、①を実行。JSONをコピーして保存する。</li>
+<li>同じSafari画面で「目印を保存」を押し、①をもう一度実行する。</li>
+<li>Safariの<strong>共有 → ホーム画面に追加</strong>を選ぶ。「Webアプリとして開く」が表示されたらオンのまま追加する。</li>
+<li>ホーム画面にできた<strong>「T0 PWA診断」アイコンから</strong>開き、画面タイトルがv0.8.1であることを確認し、①を実行する。</li>
+<li>ホーム画面アプリ側のJSONもコピーして、2つの結果を比較する。</li>
+</ol>
+<p class="fine">このページは独立した診断用のホーム画面アプリを作る試験です。既存のTrial Zero本体PWAと同じ保存領域になるとは限りません。本体アプリへのモデル移行はまだ行いません。SafariのWebサイトデータやホーム画面の既存アプリは削除しないでください。</p>
+</section>
+</main>
+<script>
+(()=>{'use strict';
+const VERSION='v0.8.1-pwa-environment-readonly';
+const ORIGIN='https://yakyouoranami723-cmd.github.io';
+const ROOT='/trial0-device-probe/';
+const CACHE_KEY='trial0-smollm135-v060';
+const MARKER_KEY='trial0-pwa-environment-v081-marker';
+const FILES=['config.json','onnx/model_q4f16.onnx','generation_config.json','tokenizer.json','tokenizer_config.json'];
+const $=id=>document.getElementById(id);
+const validOrigin=location.origin===ORIGIN&&location.pathname.startsWith(ROOT);
+let latest=null,busy=false;
+function setStatus(text){$('status').textContent=text;}
+function val(id,value,sub){const el=$(id);el.replaceChildren();const s=document.createElement('span');s.textContent=id==='model'?'SmolLM2モデルキャッシュ':id==='mode'?'起動方式':id==='marker'?'診断用の小さな目印':'この環境のストレージ使用量';if(sub){const k=document.createElement('small');k.textContent=sub;s.appendChild(k);}const b=document.createElement('strong');b.textContent=value;el.append(s,b);}
+function errorText(e){return String(e?.message||e||'unknown').slice(0,240);}
+function markerRead(){try{const raw=localStorage.getItem(MARKER_KEY);if(!raw)return{present:false};let obj;try{obj=JSON.parse(raw);}catch{return{present:true,format:'unknown'};}return{present:true,markerVersion:obj?.version||null,createdAt:obj?.createdAt||null,sourceMode:obj?.sourceMode||null};}catch(e){return{error:errorText(e)};}}
+function detectMode(){const media=typeof matchMedia==='function'&&matchMedia('(display-mode: standalone)').matches;const full=typeof matchMedia==='function'&&matchMedia('(display-mode: fullscreen)').matches;const apple=navigator.standalone===true;return{standaloneMedia:media,fullscreenMedia:full,appleStandalone:apple,mode:(media||full||apple)?'standalone_pwa':'browser_tab_or_other'};}
+function displaySize(n){return typeof n==='number'?(n/1048576).toFixed(1)+' MiB':'取得不可';}
+function fileMatch(requestUrl,file){try{const path=decodeURIComponent(new URL(requestUrl).pathname);return path.endsWith('/'+file)||path===file;}catch{return false;}}
+async function checkCache(){
+ if(!('caches' in window))return{supported:false};
+ const names=await caches.keys();const exists=names.includes(CACHE_KEY);
+ const output={supported:true,cacheNames:names.filter(x=>x.startsWith('trial0-')).slice(0,35),modelCacheName:CACHE_KEY,modelCachePresent:exists};
+ if(!exists)return output;
+ // CacheStorage.open is called only after confirming the cache exists. No cache is created here.
+ const cache=await caches.open(CACHE_KEY);const entries=await cache.keys();
+ output.entryCount=entries.length;
+ output.modelFileNames=FILES.map(file=>({file,requestKeyVisible:entries.some(req=>fileMatch(req.url,file))}));
+ output.visibleNameCount=output.modelFileNames.filter(x=>x.requestKeyVisible).length;
+ output.note='名前が見えることのみ確認。全ファイルの内容整合性・推論動作は検証していません。';
+ return output;
+}
+async function readStorage(){
+ const out={estimateSupported:typeof navigator.storage?.estimate==='function',persistentStatusSupported:typeof navigator.storage?.persisted==='function'};
+ if(out.estimateSupported){try{const e=await navigator.storage.estimate();out.usageBytes=typeof e.usage==='number'?e.usage:null;out.quotaBytes=typeof e.quota==='number'?e.quota:null;}catch(e){out.estimateError=errorText(e);}}
+ if(out.persistentStatusSupported){try{out.persisted=await navigator.storage.persisted();}catch(e){out.persistedError=errorText(e);}}
+ return out;
+}
+async function readServiceWorker(){const out={supported:'serviceWorker' in navigator,controllerPresent:!!navigator.serviceWorker?.controller};if(!out.supported)return out;try{const regs=await navigator.serviceWorker.getRegistrations();out.registrationCount=regs.length;out.hasProjectScope=regs.some(r=>r.scope.startsWith(ORIGIN+ROOT));}catch(e){out.error=errorText(e);}return out;}
+function updateMarkers(){const m=markerRead();val('marker',m.present?'あり':m.error?'読み取り不可':'なし','この診断だけの目印');return m;}
+async function run(){if(busy)return;busy=true;$('run').disabled=true;setStatus('環境と保存領域を確認中…（モデルの読み込みなし）');
+ const report={version:VERSION,checkedAt:new Date().toISOString(),originMatches:validOrigin,pagePath:location.pathname,onlineFlag:navigator.onLine,privacy:'No model download; no inference; no fetch calls from diagnostic code'};
+ try{report.environment=detectMode();report.marker=updateMarkers();
+ report.storage=await readStorage();try{report.cache=await checkCache();}catch(e){report.cache={error:errorText(e)}}
+ report.serviceWorker=await readServiceWorker();
+ latest=report;$('json').textContent=JSON.stringify(report,null,2);$('copy').disabled=false;
+ val('mode',report.environment.mode==='standalone_pwa'?'ホーム画面アプリ':'Safari等のブラウザー','表示モード判定。端末の機種判定ではありません');
+ const cm=report.cache;
+ val('model',cm?.modelCachePresent?`キャッシュ名あり (${cm.visibleNameCount ?? '?'} / 5)`:'キャッシュ名なし',cm?.error?'読み取りエラー':cm?.modelCachePresent?'ファイル名のみ照合。内容は未検証':'この環境には該当キャッシュ名がありません');
+ val('quota',displaySize(report.storage?.usageBytes),'推定使用量。OSの残りメモリではありません');
+ setStatus(validOrigin?'完了。JSONをコピーできます。':'表示元が指定のGitHub Pagesではありません。キャッシュ比較結果に注意してください。');
+ }catch(e){report.error=errorText(e);latest=report;$('json').textContent=JSON.stringify(report,null,2);$('copy').disabled=false;setStatus('一部の診断に失敗しました。JSONのerrorを確認してください。');}
+ finally{busy=false;$('run').disabled=false;}}
+$('run').addEventListener('click',run);
+$('copy').addEventListener('click',async()=>{if(!latest)return;try{await navigator.clipboard.writeText(JSON.stringify(latest,null,2));setStatus('JSONをコピーしました。');}catch{setStatus('コピーできませんでした。下のJSONを長押ししてコピーしてください。');}});
+$('setMarker').addEventListener('click',()=>{const mode=detectMode();try{localStorage.setItem(MARKER_KEY,JSON.stringify({version:VERSION,createdAt:new Date().toISOString(),sourceMode:mode.mode}));updateMarkers();setStatus('小さな目印だけを保存しました。もう一度①で診断するとJSONに反映されます。');}catch(e){setStatus('目印を保存できません: '+errorText(e));}});
+$('clearMarker').addEventListener('click',()=>{try{localStorage.removeItem(MARKER_KEY);updateMarkers();setStatus('この診断用の目印だけを削除しました。');}catch(e){setStatus('目印を削除できません: '+errorText(e));}});
+if(!validOrigin)setStatus('指定のGitHub Pages上で開いてください。HTMLを直接開くと保存領域が異なります。');
+})();
+</script>
+</body></html>
