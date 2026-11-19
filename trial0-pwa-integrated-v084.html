@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1924">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trial Zero AI">
+<title>Trial Zero v0.8.4 | PWA CPU統合診断</title>
+<style>
+:root{color-scheme:dark;--bg:#0a1620;--card:#172b39;--edge:#395569;--text:#eff8f9;--sub:#b8cdd6;--accent:#9ce8cb;--warn:#ffe0a4;--bad:#ffc9ce}
+*{box-sizing:border-box}body{margin:0;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom);background:var(--bg);color:var(--text);font:15px/1.6 system-ui,-apple-system,sans-serif}
+main{max-width:730px;margin:20px auto 48px}h1{font-size:clamp(24px,6vw,33px);line-height:1.24;margin:5px 0 9px}h2{font-size:18px;margin:0 0 10px}.lead,.note{color:var(--sub)}.note{font-size:12px}.eyebrow{font-size:11px;letter-spacing:.13em;font-weight:800;color:var(--accent)}
+section{background:var(--card);border:1px solid var(--edge);border-radius:15px;padding:15px;margin:13px 0}.warning{background:#2b271f;border-color:#8a7952}
+button{display:block;width:100%;min-height:49px;border-radius:11px;padding:12px 14px;margin:8px 0;border:1px solid #79c9b8;background:#176a5f;color:#fff;font:700 15px system-ui;cursor:pointer}button.secondary{background:#2b4558;border-color:#648499}button:disabled{opacity:.43;cursor:default}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid var(--edge)}.row:last-child{border:0}.row strong{text-align:right;max-width:65%;overflow-wrap:anywhere}.status{color:var(--warn);min-height:25px;overflow-wrap:anywhere}
+.transcript{max-height:430px;overflow:auto;background:#101f2c;border:1px solid #385060;padding:11px;border-radius:10px}.bubble{margin:9px 0;padding:10px 12px;border-radius:11px;white-space:pre-wrap;overflow-wrap:anywhere}.user{background:#324c64;margin-left:23px}.assistant{background:#1b4a42;margin-right:23px}.tag{display:block;font-size:11px;color:#d2e8e8;font-weight:750;margin-bottom:3px}
+textarea{width:100%;min-height:76px;resize:vertical;border-radius:10px;padding:10px 12px;border:1px solid #7693a4;background:#0b1b2b;color:white;font:16px/1.5 system-ui}textarea:disabled{opacity:.54}
+pre{max-height:450px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:11px;border-radius:10px;border:1px solid #385060;background:#0b1926;font:12px/1.55 ui-monospace,SFMono-Regular,monospace}
+.little{font-size:12px;color:var(--sub)}.ok{color:var(--accent)}.danger{color:var(--bad)}code{color:#b8f0df;overflow-wrap:anywhere}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO / LOCAL AI · ONE-PAGE DIAGNOSTIC</div>
+<h1>PWA CPU統合診断 <small style="font-size:13px;color:var(--sub)">v0.8.4</small></h1>
+<p class="lead">既にPWAへ保存したSmolLM2-135Mで、<strong>起動・CPU数値検査・文章生成・2ターン会話・任意の3通目</strong>を1ページで試す。保存済み117MBモデルを再ダウンロードしない。</p>
+<section class="warning"><h2>最初に確認してほしいこと</h2>
+<p>必ず<strong>前回モデル保存に成功した、同じホーム画面アイコン</strong>から開くこと。別のPWAやSafariタブでは起動を許可しません。<strong>v0.8.3.1で保存したキャッシュは削除・更新しません。</strong></p>
+<p class="note">モデルはCPU/WASM・q4f16、Transformers.js 4.3.2。モデル取得はブロックしますが、JavaScriptライブラリやWASM実行環境のCDN通信が必要な場合があります。これは完全オフライン試験ではありません。会話と結果は診断用にこのPWAのlocalStorageへ保存されます。氏名・住所・パスワードなどは入力しないでください。</p>
+<p class="note">iOSが突然ページを終了するとAIの推論状態は復元できません。診断記録は残す設計ですが、OSによる終了時の保存成功は保証できません。この版のモデル起動は一度だけ・自動再起動なしです。</p></section>
+<section><h2>① PWAと保存済みモデルを照合</h2>
+<div class="row"><span>起動方式</span><strong id="mode">未確認</strong></div>
+<div class="row"><span>保管先ID</span><strong id="appId">未確認</strong></div>
+<div class="row"><span>モデルキャッシュ</span><strong id="cache">未確認</strong></div>
+<div class="row"><span>推定保存使用量</span><strong id="storage">未確認</strong></div>
+<button id="preflight">保存済みモデルを確認（推論なし）</button>
+<div id="status" class="status" role="status" aria-live="polite">実行前です。</div>
+</section>
+<section><h2>② CPU起動・数値検査・短文生成を一括実行</h2>
+<p class="note">モデルを1回だけ初期化し、全49,152語彙のlogitsがゼロ以外か確認。合格なら <code>The capital of France is</code> の続きを最大8トークン生成します。モデルの自動ダウンロードはしません。</p>
+<button id="core" disabled>CPU/WASMを起動して基本診断を実行</button>
+<div class="row"><span>AI初期化</span><strong id="loadResult">未実施</strong></div>
+<div class="row"><span>数値チェック</span><strong id="logitResult">未実施</strong></div>
+<div class="row"><span>短文生成</span><strong id="singleResult">未実施</strong></div>
+</section>
+<section><h2>③ 固定の2ターン会話（1ボタン）</h2>
+<p class="note">1通目にマンゴーの情報を送り、2通目で質問します。前の履歴が使えたか、処理時間と回答を確認します。各回答最大16トークン。回答内容の正確性は別判定です。</p>
+<button id="pair" disabled>固定2ターンを連続実行</button>
+<div class="row"><span>固定会話</span><strong id="pairResult">未実施</strong></div>
+</section>
+<section><h2>④ 任意：自由入力で3通目を試す</h2>
+<p class="note">Safariで3通目に中断が起きたので、ここだけは任意。前2ターンの履歴を含めて生成します（最大16トークン）。実行前に送信内容と診断記録を保存し、突然の再読込を検出しやすくしています。</p>
+<label for="free" class="little">3通目の入力（最大80文字。短い英語を推奨）</label>
+<textarea id="free" maxlength="80" disabled>What was my favorite fruit?</textarea>
+<button id="third" disabled>3通目を送る（任意）</button>
+<button id="stop" class="secondary" disabled>ここで終了・モデルを解放</button>
+<div class="row"><span>3通目</span><strong id="thirdResult">未実施</strong></div>
+</section>
+<section><h2>会話・生成記録</h2><div id="chat" class="transcript"><p class="note">実行するとここに表示されます。</p></div></section>
+<section><h2>⑤ 診断JSON</h2><button id="copy" class="secondary">診断JSONをコピー</button><button id="review" class="secondary">端末内の保存済み記録を表示</button><pre id="json">診断前です。</pre><p class="note">記録はこの診断専用のキーに保存。既存のモデル・Service Worker・旧バージョンのログには触れません。途中でページが再読み込みされた場合は、ここに残る最後の状態を送ってください。</p></section>
+</main>
+<script type="module">
+'use strict';
+const V='v0.8.4-pwa-integrated-wasm';
+const ORIGIN='https://yakyouoranami723-cmd.github.io',ROOT='/trial0-device-probe/';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX',DEVICE='wasm',DTYPE='q4f16';
+const CACHE='trial0-smollm135-v060',APP_KEY='trial0-v083-canonical-pwa';
+const EXPECTED_ID='e17e70bd-f0e6-4439-9168-ac6573c1c855';
+const LOG_KEY='trial0-pwa-integrated-v084-log',ATTEMPT_KEY='trial0-pwa-integrated-v084-model-attempt';
+const P='The capital of France is';
+const PROMPT1='My favorite fruit is mango. Please reply with OK.';
+const PROMPT2='What is my favorite fruit? Answer in one word.';
+const $=id=>document.getElementById(id);
+const validSite=location.origin===ORIGIN&&location.pathname.startsWith(ROOT);
+const isPwa=()=>navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
+let busy=false,preflightOK=false,phase='idle',generator=null,library=null,history=[],transcript=[],events=[];
+let report={version:V,status:'not_started',model:MODEL,device:DEVICE,dtype:DTYPE,cacheKey:CACHE,modelDownloadAttempted:false,wasmThreads:1,limits:{singleTokens:8,chatTokens:16,thirdTokens:16}};
+const now=()=>new Date().toISOString();
+function errorInfo(e){return{name:String(e?.name||'Error'),message:String(e?.message||e||'unknown').slice(0,1200),stack:typeof e?.stack==='string'?e.stack.split('\n').slice(0,4).join('\n'):null};}
+function marker(){try{const x=JSON.parse(localStorage.getItem(APP_KEY)||'null');return x?.version==='v0.8.3-pwa-model-cache-only'&&typeof x.id==='string'?x:null;}catch{return null;}}
+function appOK(){return validSite&&isPwa()&&marker()?.id===EXPECTED_ID;}
+function setStatus(s){$('status').textContent=s;}
+function renderLog(){$('json').textContent=JSON.stringify({report,events,transcript},null,2);}
+function save(){try{localStorage.setItem(LOG_KEY,JSON.stringify({report,events,transcript}));return true;}catch(e){report.journalError=String(e?.message||e).slice(0,250);renderLog();return false;}finally{renderLog();}}
+function event(name,meta={}){events.push({at:now(),name,...meta});events=events.slice(-90);return save();}
+function showChat(){const root=$('chat');root.replaceChildren();if(!transcript.length){const p=document.createElement('p');p.className='note';p.textContent='会話はまだありません。';root.append(p);return;}for(const m of transcript){const d=document.createElement('div');d.className='bubble '+(m.role==='user'?'user':'assistant');const t=document.createElement('span');t.className='tag';t.textContent=m.role==='user'?'YOU':m.role==='assistant'?'TRIAL ZERO':'単文テスト';d.append(t,document.createTextNode(m.content||'(空文字)'));root.append(d);}root.scrollTop=root.scrollHeight;}
+function refresh(){
+ const locked=!!localStorage.getItem(ATTEMPT_KEY);
+ $('preflight').disabled=busy||!validSite||locked;
+ $('core').disabled=busy||!preflightOK||locked||!appOK();
+ $('pair').disabled=busy||!generator||phase!=='core_ok';
+ $('free').disabled=busy||!generator||phase!=='pair_ok';
+ $('third').disabled=busy||!generator||phase!=='pair_ok'||!$('free').value.trim();
+ $('stop').disabled=busy||!generator;
+ $('review').disabled=busy||!!generator;
+}
+function restore(){
+ try{const x=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(x){report=x.report||report;events=Array.isArray(x.events)?x.events:[];transcript=Array.isArray(x.transcript)?x.transcript:[];}}catch{}
+ $('mode').textContent=isPwa()?'standalone PWA':'Safari等（実行不可）';
+ $('appId').textContent=marker()?.id||'v0.8.3の保管先IDなし';
+ if(report.cacheStatus)$('cache').textContent=report.cacheStatus.allCached?'5/5 認識':'不足あり';
+ if(report.storageBefore?.usageBytes!=null)$('storage').textContent=(report.storageBefore.usageBytes/1048576).toFixed(1)+' MiB（概算）';
+ if(report.modelInitMs!=null)$('loadResult').textContent=report.modelInitMs+' ms';
+ if(report.logits)$('logitResult').textContent=report.logits.allFiniteZero?'全ゼロ':report.logits.finiteCount+'/'+report.logits.vocab+' 有限値';
+ if(typeof report.singleAnswer==='string')$('singleResult').textContent=report.singleAnswer.trim()?'生成済み':'空文字';
+ if(report.chat?.length)$('pairResult').textContent=report.chat.length+'/2 回生成';
+ if(report.third)$('thirdResult').textContent=report.third.answer?'生成済み':'空文字';
+ if(localStorage.getItem(ATTEMPT_KEY)){
+   const interrupted=['initializing','numeric_check','single_generating','chat_turn1_generating','chat_turn2_generating','chat_turn3_generating'].includes(report.status);
+   setStatus(interrupted?'前回の実行は途中で中断された可能性があります。AI状態は復元できません。記録をコピーして送ってください。':'この版は起動済みです。再読み込みではAI状態を復元しません。保存記録を確認してください。');
+ }else if(!appOK())setStatus('保存先PWAと一致しません。前回モデルを保存したホーム画面アイコンから開いてください。');
+ showChat();renderLog();refresh();
+}
+async function runtime(){
+ if(library)return library;
+ const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+ m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=CACHE;
+ m.env.allowLocalModels=false;m.env.allowRemoteModels=true;
+ if(m.env.backends?.onnx?.wasm)m.env.backends.onnx.wasm.numThreads=1;
+ const nativeFetch=globalThis.fetch.bind(globalThis);
+ m.env.fetch=async(input,init)=>{
+  const url=typeof input==='string'?input:(input?.url||String(input));
+  let u;try{u=new URL(url,location.href);}catch{throw Error('取得URLが無効');}
+  if(u.origin!==location.origin&&u.hostname!=='cdn.jsdelivr.net'){
+   report.blockedModelRequests=(report.blockedModelRequests||[]).slice(-5).concat([{at:now(),host:u.hostname,path:u.pathname.slice(0,120)}]);
+   save();throw Error('モデルの外部取得を遮断: '+u.hostname);
+  }
+  return nativeFetch(input,init);
+ };
+ library=m;return m;
+}
+async function cacheCheck(){const m=await runtime();if(typeof m.ModelRegistry?.is_pipeline_cached_files!=='function')throw Error('公式キャッシュ確認APIなし');return m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});}
+async function storage(){try{const x=await navigator.storage.estimate();return{usageBytes:x.usage??null,quotaBytes:x.quota??null};}catch(e){return{error:errorInfo(e)};}}
+function answerFrom(output){const raw=output?.[0]?.generated_text;if(Array.isArray(raw)){const last=raw.at(-1);return typeof last?.content==='string'?last.content:'';}return typeof raw==='string'?raw:'';}
+function logitsSummary(t){
+ const dims=Array.from(t?.dims||[]), data=t?.data;const vocab=Number(dims.at(-1));
+ if(!data||!Number.isSafeInteger(vocab)||vocab<100||vocab>data.length)throw Error('logits形状異常');
+ let finiteCount=0,zeroCount=0,NaNCount=0,min=Infinity,max=-Infinity,argmax=0;
+ const start=data.length-vocab;
+ for(let i=0;i<vocab;i++){const v=Number(data[start+i]);if(!Number.isFinite(v)){NaNCount++;continue;}finiteCount++;if(v===0)zeroCount++;if(v<min)min=v;if(v>max){max=v;argmax=i;}}
+ return{dims,vocab,finiteCount,zeroCount,nonFiniteCount:NaNCount,min:Number.isFinite(min)?min:null,max:Number.isFinite(max)?max:null,argmax,allFiniteZero:finiteCount===vocab&&zeroCount===vocab};
+}
+async function release(){if(!generator)return;const g=generator;generator=null;try{await g.dispose?.();event('pipeline_disposed');}catch(e){event('dispose_error',{error:errorInfo(e)});}}
+async function stopWith(status,message){report.status=status;report.completedAt=now();phase='done';event('session_finished',{status});setStatus(message);await release();refresh();}
+function begin(status,msg){busy=true;report.status=status;setStatus(msg);event(status);refresh();}
+function end(){busy=false;save();refresh();}
+$('preflight').addEventListener('click',async()=>{
+ if(busy||!validSite||localStorage.getItem(ATTEMPT_KEY))return;
+ busy=true;preflightOK=false;report.startedAt=now();report.status='preflight';event('preflight_started');refresh();
+ try{
+  report.environment={standalone:isPwa(),appleStandalone:navigator.standalone===true,appId:marker()?.id||null,expectedIdMatched:appOK()};
+  $('mode').textContent=isPwa()?'standalone PWA':'Safari等（実行不可）';$('appId').textContent=marker()?.id||'なし';
+  if(!appOK())throw Error('前回モデルを保存したPWAと一致しない');
+  report.storageBefore=await storage();$('storage').textContent=report.storageBefore.usageBytes==null?'取得不可':(report.storageBefore.usageBytes/1048576).toFixed(1)+' MiB';
+  report.cacheStatus=await cacheCheck();$('cache').textContent=report.cacheStatus.allCached?'5/5 認識':'不足あり';
+  if(report.cacheStatus.allCached!==true)throw Error('必要モデル5ファイルがキャッシュにない。モデル取得しません。');
+  const journalOK=event('preflight_ok',{allCached:true,appId:marker().id});if(!journalOK)throw Error('localStorageへの診断保存に失敗。AI起動しません。');
+  preflightOK=true;phase='preflight_ok';report.status='cache_ready';save();setStatus('5/5確認済み。②でCPU起動と基本診断を一括実行できます。');
+ }catch(e){report.error=errorInfo(e);report.status='preflight_error';event('preflight_error',{error:report.error});setStatus('事前確認で停止。モデルは起動していません。JSONを送ってください。');}
+ finally{end();}
+});
+$('core').addEventListener('click',async()=>{
+ if(busy||!preflightOK||!appOK()||localStorage.getItem(ATTEMPT_KEY))return;
+ if(!save()){setStatus('ログが保存できないので実行しません。');return;}
+ try{localStorage.setItem(ATTEMPT_KEY,now());}catch(e){setStatus('起動ロックを保存できないため実行を中断しました。');return;}begin('initializing','キャッシュからCPU/WASMモデルを起動中…');
+ try{
+  const checked=await cacheCheck();report.cacheBeforeLoad=checked;if(checked.allCached!==true)throw Error('起動直前にキャッシュ不足を検出');
+  const m=await runtime(),t0=performance.now();generator=await m.pipeline('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+  report.modelInitMs=Math.round(performance.now()-t0);$('loadResult').textContent=report.modelInitMs+' ms';event('pipeline_ready',{modelInitMs:report.modelInitMs});
+  report.status='numeric_check';event('numeric_check_started');setStatus('CPUでlogitsの数値を検証中…');
+  const input=generator.tokenizer(P);const t1=performance.now();const result=await generator.model(input);report.forwardMs=Math.round(performance.now()-t1);
+  try{report.logits=logitsSummary(result?.logits);}finally{try{result?.logits?.dispose?.();}catch{}}
+  $('logitResult').textContent=report.logits.allFiniteZero?'全ゼロ':report.logits.finiteCount+'/'+report.logits.vocab+' 有限';
+  event('numeric_check_finished',{forwardMs:report.forwardMs,finiteCount:report.logits.finiteCount,zeros:report.logits.zeroCount});
+  if(report.logits.allFiniteZero||report.logits.finiteCount!==report.logits.vocab)throw Error('logitsが全ゼロまたは非有限値を含む。生成中断。');
+  report.status='single_generating';event('single_started');setStatus('最大8トークンの文章を生成中…');
+  const t2=performance.now();const out=await generator(P,{max_new_tokens:8,do_sample:false,return_full_text:false});
+  report.singleElapsedMs=Math.round(performance.now()-t2);report.singleAnswer=answerFrom(out);
+  transcript.push({role:'test',content:report.singleAnswer});showChat();event('single_finished',{length:report.singleAnswer.length,elapsedMs:report.singleElapsedMs});
+  $('singleResult').textContent=report.singleAnswer.trim()?'生成成功':'空文字';
+  if(!report.singleAnswer.trim())throw Error('短文生成が空文字でした。会話試験は行いません。');
+  phase='core_ok';report.status='core_pass';setStatus('CPU起動・数値検証・短文生成に成功！③で2ターン会話へ。');event('core_pass');
+ }catch(e){report.error=errorInfo(e);event('core_error',{error:report.error});await stopWith('core_error','基本診断で停止。再実行せずJSONを送ってください。');}
+ finally{end();}
+});
+async function chatTurn(num,prompt,messages){
+ report.status='chat_turn'+num+'_generating';transcript.push({role:'user',content:prompt});
+ report.pendingTurn={num,startedAt:now(),messageCount:messages.length,inputLength:prompt.length};
+ if(!event('chat_turn_started',{num,messageCount:messages.length,inputLength:prompt.length}))throw Error('生成開始ログを保存できません');
+ showChat();setStatus(num+'通目の回答を生成中…');
+ const t=performance.now(),output=await generator(messages,{max_new_tokens:16,do_sample:false});
+ const answer=answerFrom(output),elapsedMs=Math.round(performance.now()-t);
+ transcript.push({role:'assistant',content:answer});report.chat=report.chat||[];report.chat.push({turn:num,elapsedMs,answer,historyMessages:messages.length});
+ report.pendingTurn=null;showChat();event('chat_turn_finished',{num,elapsedMs,chars:answer.length});
+ if(!answer.trim())throw Error(num+'通目の回答が空でした');
+ return answer;
+}
+$('pair').addEventListener('click',async()=>{
+ if(busy||!generator||phase!=='core_ok')return;busy=true;refresh();
+ try{
+  const first=[{role:'user',content:PROMPT1}];const a1=await chatTurn(1,PROMPT1,first);history=first.concat([{role:'assistant',content:a1}]);save();
+  const second=history.concat([{role:'user',content:PROMPT2}]);const a2=await chatTurn(2,PROMPT2,second);history=second.concat([{role:'assistant',content:a2}]);
+  report.mentionsMango=/\bmango\b/i.test(a2);report.chatPassed=true;phase='pair_ok';report.status='pair_pass';
+  $('pairResult').textContent='2/2生成（mango:'+ (report.mentionsMango?'あり':'なし') +'）';event('pair_pass',{mentionsMango:report.mentionsMango});
+  setStatus('2ターンの文章生成成功。④は任意。ここで終了してもOK。');
+ }catch(e){report.error=errorInfo(e);event('pair_error',{error:report.error});await stopWith('pair_error','会話試験で停止。JSONを送ってください。');}
+ finally{end();}
+});
+$('third').addEventListener('click',async()=>{
+ if(busy||!generator||phase!=='pair_ok')return;
+ const prompt=$('free').value.trim();if(!prompt||prompt.length>80)return;
+ busy=true;refresh();
+ try{
+  const messages=history.concat([{role:'user',content:prompt}]);const answer=await chatTurn(3,prompt,messages);
+  report.third={prompt,answer,historyMessages:messages.length};$('thirdResult').textContent=answer?'生成成功':'空文字';
+  event('third_finished',{length:answer.length,historyMessages:messages.length});await stopWith('all_pass','3通目も生成完了。JSONを送ってください。');
+ }catch(e){report.error=errorInfo(e);event('third_error',{error:report.error});await stopWith('third_error','3通目でエラー。ログを送ってください。');}
+ finally{end();}
+});
+$('stop').addEventListener('click',async()=>{if(busy||!generator)return;busy=true;refresh();try{await stopWith('stopped_by_user','モデルを解放して終了しました。JSONを送ってください。');}finally{end();}});
+$('free').addEventListener('input',refresh);
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify({report,events,transcript},null,2));setStatus('JSONをコピーしました。会話内容が含まれます。');}catch{setStatus('コピーできません。下のJSONを長押ししてコピーしてください。');}});
+$('review').addEventListener('click',()=>{if(generator||busy)return;restore();});
+window.addEventListener('pagehide',()=>{if(generator||busy)event('pagehide',{status:report.status,phase});});
+window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&(generator||busy))event('hidden',{status:report.status,phase});});
+restore();
+</script>
+</body></html>
