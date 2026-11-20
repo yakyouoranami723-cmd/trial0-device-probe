@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1924">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trial Zero AI">
+<title>Trial Zero v0.8.6 | 会話品質・モデル交換準備</title>
+<style>
+:root{color-scheme:dark;--bg:#0a1620;--panel:#172c3a;--border:#385969;--text:#eff9fa;--sub:#b5ced7;--accent:#9ce8cb;--amber:#ffdea0;--bad:#ffbdbd;--blue:#a9d9ef}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.62 -apple-system,BlinkMacSystemFont,system-ui,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:780px;margin:19px auto 55px}.eyebrow{font-size:11px;font-weight:800;letter-spacing:.12em;color:var(--accent)}
+h1{font-size:clamp(25px,6.1vw,33px);line-height:1.25;margin:5px 0 7px}h2{font-size:18px;margin:0 0 10px}h3{font-size:15px;margin:0 0 7px}
+p{margin:8px 0 12px}.sub,.tiny{color:var(--sub)}.tiny{font-size:12px;line-height:1.55}.notice{background:#2b291e;border-color:#817453}
+section{background:var(--panel);border:1px solid var(--border);padding:15px;border-radius:15px;margin:13px 0}
+button{display:block;width:100%;min-height:48px;margin:7px 0;padding:11px 13px;border:1px solid #7acdbc;border-radius:10px;background:#176b60;color:white;font:700 15px system-ui;cursor:pointer}button.secondary{background:#2d485b;border-color:#6b8d9f}button:disabled{opacity:.42;cursor:default}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)}.row:last-child{border:0}.row strong{text-align:right;max-width:66%;overflow-wrap:anywhere}.status{min-height:28px;color:var(--amber);overflow-wrap:anywhere}
+.conditions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}@media(max-width:560px){.conditions{grid-template-columns:1fr}}
+.case{border:1px solid #527080;background:#101f2c;border-radius:11px;padding:11px}.case .id{display:inline-block;background:#245c58;color:#c6fff2;border-radius:5px;padding:1px 7px;font-weight:800;margin-right:6px}
+.case .detail{font-size:12px;color:var(--sub)}.case .result{font-size:12px;color:var(--blue);margin-top:5px}
+.progress{width:100%;height:8px;border-radius:20px;background:#294451;overflow:hidden;margin:12px 0}.progress>div{height:100%;width:0;background:#90dfc8;transition:width .2s}
+.result{border:1px solid #426273;background:#102330;border-radius:12px;padding:12px;margin:11px 0}.result .heading{font-weight:800}.sample{margin:6px 0 10px;padding:8px 10px;border-radius:9px;background:#193b42;white-space:pre-wrap;overflow-wrap:anywhere}.sample .prompt{font-size:12px;color:#c2e5e7;display:block;margin-bottom:4px}.statline{font-size:12px;color:var(--sub)}
+select{background:#0b1e2b;border:1px solid #6a91a1;color:#fff;border-radius:8px;padding:9px;width:100%;font:15px system-ui}label{font-size:13px;color:var(--sub)}
+pre{max-height:440px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;background:#0c1d2a;border:1px solid var(--border);border-radius:10px;font:12px/1.52 ui-monospace,Menlo,monospace}
+.pill{font-size:11px;color:#c8f6e9;background:#24534c;border-radius:20px;padding:3px 9px}.flex{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.good{color:var(--accent)}code{color:#b2eadc;overflow-wrap:anywhere}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO / MODEL-AGNOSTIC QUALITY BENCHMARK</div>
+<h1>会話品質・4条件統合診断 <span class="tiny">v0.8.6</span></h1>
+<p class="sub">既にPWAへ保存しているSmolLM2-135Mをそのまま使用。自己紹介の繰り返し・回答の途切れ・会話内の事実参照が、<strong>プログラム側の調整でどこまで変わるか</strong>を比較する。</p>
+<section class="notice"><h2>試験のルール</h2>
+<p>前回モデルを保存した<strong>同じホーム画面アイコン</strong>で開くこと。モデルの再ダウンロードは許可しない。CPU/WASM・q4f16・Transformers.js 4.3.2を維持する。</p>
+<p class="tiny">4条件は同じ3問を実行。最初の2問は連続会話、3問目は固定された「マンゴーの事実」を会話履歴に与える試験。事実の回答は、あらかじめ設定した過去の発言に基づくもので、長期記憶能力の試験ではありません。</p>
+<p class="tiny">各条件は<strong>手動で開始</strong>し、生成が終わるたび記録を保存します。iPhoneが重くなったら次の条件に進まず終了してください。すべて英語の短文。個人情報は入力しないでください。ライブラリとWASM実行環境はCDN通信が必要な場合があり、完全オフライン試験ではありません。</p>
+</section>
+<section><h2>① PWA・キャッシュを確認</h2>
+<div class="row"><span>ホーム画面アプリ</span><strong id="app">未確認</strong></div>
+<div class="row"><span>モデル構成</span><strong id="model">SmolLM2-135M / wasm q4f16</strong></div>
+<div class="row"><span>モデルキャッシュ</span><strong id="cached">未確認</strong></div>
+<div class="row"><span>保存領域使用量（概算）</span><strong id="storage">未確認</strong></div>
+<button id="check">モデルを再取得せず、環境を確認</button>
+<button id="load" disabled>保存済みモデルを起動（CPU/WASM）</button>
+<div class="row"><span>AI初期化</span><strong id="init">未実施</strong></div>
+<div class="row"><span>チャットテンプレート</span><strong id="template">未確認</strong></div>
+<div id="status" class="status" role="status" aria-live="polite">まだ検証していません。</div>
+</section>
+<section><h2>② 同じ質問で4条件を比較</h2>
+<div class="conditions">
+<div class="case"><div><span class="id">A</span><strong>従来設定</strong></div><div class="detail">system指示なし / 16トークン / greedy</div><div id="caseA" class="result">未実施</div></div>
+<div class="case"><div><span class="id">B</span><strong>ゼロちの役割指示</strong></div><div class="detail">system指示あり / 16トークン / greedy</div><div id="caseB" class="result">未実施</div></div>
+<div class="case"><div><span class="id">C</span><strong>文章を長くする</strong></div><div class="detail">system指示あり / 32トークン / greedy</div><div id="caseC" class="result">未実施</div></div>
+<div class="case"><div><span class="id">D</span><strong>反復を抑える</strong></div><div class="detail">system指示あり / 32トークン / greedy / repetition penalty 1.12</div><div id="caseD" class="result">未実施</div></div>
+</div>
+<div class="progress"><div id="bar"></div></div>
+<div class="row"><span>次の条件</span><strong id="next">A</strong></div>
+<div class="row"><span>現在の作業</span><strong id="active">待機</strong></div>
+<button id="nextButton" disabled>次の条件を実行（3問・ログ保存）</button>
+<button id="stop" class="secondary" disabled>AIを解放して終了</button>
+<p class="tiny">すべての条件でモデルは1回だけ初期化して再利用。途中終了しても、完了した条件の記録は残ります。再読み込み後、AIは自動再起動・自動再生成しません。</p>
+</section>
+<section><h2>③ 回答と速度を比較</h2>
+<div id="results"><p class="sub">各条件の終了後、実際の回答と応答時間が表示されます。</p></div>
+<p class="tiny">「会話として成立」の評価は本人の判断を記録できます。自動表示する「mangoあり」などは簡易指標であり、自然さや理解力を保証しません。</p>
+</section>
+<section><h2>④ 診断記録</h2>
+<button id="copy" class="secondary">診断JSONをコピー</button>
+<button id="review" class="secondary">保存記録を読み直す</button>
+<pre id="json">まだ記録はありません。</pre>
+<p class="tiny">この版専用の新しい保存キーに記録。既存のv0.8.4・v0.8.5の履歴、117MBモデル、Service Workerは変更しません。現在のモデルから別のモデルへ交換するときは、モデルID・キャッシュ名・推論アダプターをセットで変更する設計です。<strong>この診断ページ自体にモデル交換機能はありません。</strong></p>
+</section>
+</main>
+<script type="module">
+'use strict';
+const VERSION='v0.8.6-model-independent-quality-test';
+const ORIGIN='https://yakyouoranami723-cmd.github.io',ROOT='/trial0-device-probe/';
+const APP_KEY='trial0-v083-canonical-pwa';
+const EXPECTED_ID='e17e70bd-f0e6-4439-9168-ac6573c1c855';
+const LOG_KEY='trial0-v086-quality-journal';
+const PROFILES=Object.freeze({
+ current:Object.freeze({id:'smollm2-135m-cpu-q4f16',label:'SmolLM2-135M-Instruct / CPU WASM q4f16',model:'onnx-community/SmolLM2-135M-Instruct-ONNX',task:'text-generation',device:'wasm',dtype:'q4f16',cacheKey:'trial0-smollm135-v060',runtimeVersion:'4.3.2',adapter:'transformersjs-wasm'})
+});
+// A future model can be registered with its own ID/cacheKey/adapter, after separate compatibility testing.
+// Nothing in this test automatically installs or switches to another model.
+const PROFILE=PROFILES.current;
+const SYSTEM='You are Zero, a small personal AI assistant. Answer the latest user message directly and briefly in English. Greet back when greeted. Answer how you are when asked. Do not introduce your abilities or training unless asked. Use facts in the provided conversation. If unsure, say so.';
+const CONDITIONS=Object.freeze([
+ {id:'A',label:'従来設定',system:false,maxTokens:16,penalty:null},
+ {id:'B',label:'役割指示',system:true,maxTokens:16,penalty:null},
+ {id:'C',label:'役割指示＋32トークン',system:true,maxTokens:32,penalty:null},
+ {id:'D',label:'役割指示＋32トークン＋反復対策',system:true,maxTokens:32,penalty:1.12}
+]);
+const QUESTIONS=Object.freeze([
+ {id:'greeting',user:'Hello',context:'新規会話の挨拶'},
+ {id:'followup',user:'How are you?',context:'1問目のやり取りを引き継ぐ'},
+ {id:'fact',user:'What is my favorite fruit? Answer in one sentence.',context:'固定の過去会話（mango）を参照'}
+]);
+const $=id=>document.getElementById(id);
+const now=()=>new Date().toISOString();
+const isPwa=()=>navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
+const validSite=()=>location.origin===ORIGIN&&location.pathname.startsWith(ROOT);
+function getMarker(){try{const m=JSON.parse(localStorage.getItem(APP_KEY)||'null');return m?.version==='v0.8.3-pwa-model-cache-only'?m:null;}catch{return null;}}
+function appOK(){return validSite()&&isPwa()&&getMarker()?.id===EXPECTED_ID;}
+function errorInfo(e){return {name:String(e?.name||'Error'),message:String(e?.message||e||'unknown').slice(0,800)};}
+function newJournal(){return {version:VERSION,createdAt:now(),status:'idle',environment:null,profile:{...PROFILE},configuration:{systemInstruction:SYSTEM,conditions:CONDITIONS,questions:QUESTIONS},modelDownloadAttempted:false,loadAttempts:0,completedConditions:0,interruptions:0,recovered:0,runs:[],events:[]};}
+let journal=newJournal(),busy=false,verified=false,modelLoaded=false,sessionModel=null,library=null;
+const adapter={
+ async ensureRuntime(){
+  if(library)return library;
+  const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+  m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=PROFILE.cacheKey;
+  m.env.allowLocalModels=false;m.env.allowRemoteModels=true;
+  if(m.env.backends?.onnx?.wasm)m.env.backends.onnx.wasm.numThreads=1;
+  const realFetch=globalThis.fetch.bind(globalThis);
+  m.env.fetch=async(input,init)=>{
+    const raw=typeof input==='string'?input:(input?.url||String(input));
+    let u;try{u=new URL(raw,location.href);}catch{throw Error('モデル取得URLが無効');}
+    if(u.origin!==location.origin&&u.hostname!=='cdn.jsdelivr.net'){
+      journal.blockedRequests=(journal.blockedRequests||[]).slice(-4).concat([{at:now(),host:u.hostname,path:u.pathname.slice(0,100)}]);
+      persist();throw Error('モデル外部取得を遮断: '+u.hostname);
+    }
+    return realFetch(input,init);
+  };
+  library=m;return m;
+ },
+ async cacheStatus(){const m=await this.ensureRuntime();if(!m.ModelRegistry?.is_pipeline_cached_files)throw Error('キャッシュ確認APIを利用できません');return await m.ModelRegistry.is_pipeline_cached_files(PROFILE.task,PROFILE.model,{device:PROFILE.device,dtype:PROFILE.dtype});},
+ async load(){const m=await this.ensureRuntime();return await m.pipeline(PROFILE.task,PROFILE.model,{device:PROFILE.device,dtype:PROFILE.dtype});},
+ async generate(messages,options){return await sessionModel(messages,options);},
+ async dispose(){if(!sessionModel)return;const p=sessionModel;sessionModel=null;await p.dispose?.();}
+};
+function persist(){journal.savedAt=now();try{localStorage.setItem(LOG_KEY,JSON.stringify(journal));renderJSON();return true;}catch(e){$('status').textContent='保存領域への診断記録書き込みに失敗。以降の推論は中止します。';renderJSON();return false;}}
+function log(name,extra={}){journal.events.push({at:now(),name,...extra});journal.events=journal.events.slice(-140);return persist();}
+function say(value){$('status').textContent=value;}
+function renderJSON(){$('json').textContent=JSON.stringify(journal,null,2);}
+function latestFor(id){return journal.runs.filter(x=>x.condition===id).at(-1)||null;}
+function isFinal(id){const attempts=journal.runs.filter(x=>x.condition===id);return attempts.some(r=>r.state==='complete')||attempts.length>=2;}
+function nextCondition(){return CONDITIONS.find(c=>!isFinal(c.id))||null;}
+function render(){
+ $('app').textContent=isPwa()?'PWA / '+(appOK()?'保管先一致':'保管先不一致'):'Safari等（実行不可）';
+ $('model').textContent=PROFILE.label;
+ if(journal.cacheStatus)$('cached').textContent=journal.cacheStatus.allCached?'5/5 キャッシュ済':'不足あり';
+ if(journal.storage?.usageBytes!=null)$('storage').textContent=(journal.storage.usageBytes/1048576).toFixed(1)+' MiB';
+ if(journal.initMs!=null)$('init').textContent=journal.initMs+' ms';
+ if(journal.templateInfo)$('template').textContent=journal.templateInfo.present?(journal.templateInfo.includesDefaultSmolLM?'SmolLM既定指示あり':'既定指示なし／要確認'):'取得不可';
+ const next=nextCondition();$('next').textContent=next?next.id+'：'+next.label:'すべて完了';
+ $('active').textContent=journal.pending?`${journal.pending.condition} / ${journal.pending.question}`:(busy?'処理中':'待機');
+ const finalCount=CONDITIONS.filter(c=>isFinal(c.id)).length;
+ $('bar').style.width=(100*finalCount/CONDITIONS.length)+'%';
+ for(const c of CONDITIONS){const r=latestFor(c.id);$('case'+c.id).textContent=!r?'未実施':r.state==='complete'?`完了 / ${r.elapsedMs}ms / ${r.answers.length}問`:r.state==='running'?'実行中':r.state==='interrupted'?'中断（手動再試行可）':r.state==='error'?'エラー（再試行可能）':r.state;}
+ $('check').disabled=busy||modelLoaded||!validSite();
+ $('load').disabled=busy||!verified||modelLoaded||!appOK();
+ $('nextButton').disabled=busy||!modelLoaded||!next;
+ $('nextButton').textContent=next?'条件'+next.id+'を実行（最大'+next.maxTokens+'トークン×3問）':'比較完了';
+ $('stop').disabled=busy||!modelLoaded;
+ $('review').disabled=busy;
+ renderResults();renderJSON();
+}
+function renderResults(){
+ const area=$('results');area.replaceChildren();
+ const finalized=journal.runs.filter(r=>r.state!=='running');
+ if(finalized.length===0){const p=document.createElement('p');p.className='sub';p.textContent='各条件の終了後、実際の回答と応答時間が表示されます。';area.append(p);return;}
+ for(const r of finalized){
+  const block=document.createElement('div');block.className='result';
+  const top=document.createElement('div');top.className='flex';const title=document.createElement('span');title.className='heading';title.textContent=`${r.condition}：${r.label} （${r.state==='complete'?'完了':r.state}）`;
+  const ms=document.createElement('span');ms.className='pill';ms.textContent=`${r.elapsedMs??'—'} ms / ${r.answers.length}回答`;top.append(title,ms);block.append(top);
+  for(const a of r.answers){const e=document.createElement('div');e.className='sample';const q=document.createElement('span');q.className='prompt';q.textContent=`${a.question}｜${a.user} （${a.elapsedMs}ms）`;e.append(q,document.createTextNode(a.answer||'（空）'));block.append(e);}
+  if(r.state==='complete'){
+   const stat=document.createElement('div');stat.className='statline';stat.textContent=`mango参照: ${r.containsMango?'あり':'なし'} ／ 自己紹介らしい表現: ${r.selfIntroCount}件 ／ 末尾の句読点: ${r.terminalPunctuation}/3（単純な目安）`;block.append(stat);
+   const lab=document.createElement('label');lab.textContent='自分の評価（会話として）';const select=document.createElement('select');select.dataset.case=r.condition;select.dataset.attempt=String(r.attempt);
+   [['','未評価'],['0','0：会話になっていない'],['1','1：一部は成立'],['2','2：おおむね自然']].forEach(([v,t])=>{const op=document.createElement('option');op.value=v;op.textContent=t;select.append(op);});
+   select.value=r.userRating==null?'':String(r.userRating);select.addEventListener('change',()=>{r.userRating=select.value===''?null:Number(select.value);log('user_rating',{condition:r.condition,attempt:r.attempt,rating:r.userRating});});lab.append(select);block.append(lab);
+  }else if(r.error){const stat=document.createElement('div');stat.className='statline';stat.textContent='エラー: '+r.error.message;block.append(stat);}
+  area.append(block);
+ }
+}
+function restore(){
+ let hadSaved=false;
+ try{const x=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(x&&x.version===VERSION&&Array.isArray(x.runs)){journal=x;hadSaved=true;}}catch{}
+ if(journal.pending){const r=latestFor(journal.pending.condition);if(r&&r.state==='running'){r.state='interrupted';journal.interruptions++;}journal.events.push({at:now(),name:'pending_recovered_without_model',pending:journal.pending});journal.pending=null;}
+ if(journal.status==='model_ready'||journal.status==='condition_running'||journal.status==='model_loading'){journal.events.push({at:now(),name:'model_state_not_restored',previous:journal.status});journal.status='not_running_after_reload';}
+ if(hadSaved)journal.recovered++;
+ if(!appOK())say('PWAの保管先IDが一致しません。既存のホーム画面アイコンから開いてください。');
+ else if(journal.runs.length)say('保存済み結果を復元しました。モデルは未起動です。必要なら手動で再起動できます。');
+ persist();render();
+}
+function answerFrom(output){const raw=output?.[0]?.generated_text;if(Array.isArray(raw)){const last=raw.at(-1);return typeof last?.content==='string'?last.content:'';}return typeof raw==='string'?raw:'';}
+function messagesFor(c,test,firstAnswer){
+ const sys=c.system?[{role:'system',content:SYSTEM}]:[];
+ if(test===0)return sys.concat([{role:'user',content:QUESTIONS[0].user}]);
+ if(test===1)return sys.concat([{role:'user',content:QUESTIONS[0].user},{role:'assistant',content:firstAnswer},{role:'user',content:QUESTIONS[1].user}]);
+ return sys.concat([{role:'user',content:'My favorite fruit is mango.'},{role:'assistant',content:'OK.'},{role:'user',content:QUESTIONS[2].user}]);
+}
+function qualityStats(r){const s=r.answers.map(a=>a.answer);r.containsMango=/\bmango\b/i.test(s[2]||'');r.selfIntroCount=s.filter(x=>/i(?:'m| am) (?:a |an )?(?:chatbot|ai|assistant|language model)|as an? (?:ai|assistant)|trained by/i.test(x)).length;r.terminalPunctuation=s.filter(x=>/[.!?][\s"')\]]*$/.test(x.trim())).length;}
+async function release(){if(!sessionModel)return;try{await adapter.dispose();log('model_disposed');}catch(e){log('model_dispose_error',{error:errorInfo(e)});}finally{modelLoaded=false;render();}}
+async function cachePreflight(){if(busy||modelLoaded)return;busy=true;say('モデルキャッシュを確認中…');render();journal.status='checking_cache';log('cache_check_started');
+ try{
+  journal.environment={standalone:isPwa(),appleStandalone:navigator.standalone===true,appId:getMarker()?.id||null,expectedIdMatched:appOK()};
+  if(!appOK())throw Error('PWAの識別子が不一致。モデルは起動しません');
+  try{const estimate=await navigator.storage.estimate();journal.storage={usageBytes:estimate.usage??null,quotaBytes:estimate.quota??null};}catch{journal.storage=null;}
+  const x=await adapter.cacheStatus();journal.cacheStatus=x;
+  if(x.allCached!==true)throw Error('必要な5ファイルがキャッシュにありません。再取得しません');
+  verified=true;journal.status='cache_ready';log('cache_check_pass',{files:x.files});say('5/5 認識。モデルを起動できます。');
+ }catch(e){verified=false;journal.status='cache_check_error';journal.error=errorInfo(e);log('cache_check_error',{error:journal.error});say('保存先かキャッシュの確認で停止しました。');}
+ finally{busy=false;render();}
+}
+async function loadModel(){if(busy||!verified||modelLoaded||!appOK())return;busy=true;render();
+ journal.loadAttempts++;journal.status='model_loading';if(!log('model_load_started',{attempt:journal.loadAttempts})){busy=false;render();return;}
+ try{const before=await adapter.cacheStatus();if(!before.allCached)throw Error('起動直前にキャッシュ不足');
+  const t=performance.now();sessionModel=await adapter.load();journal.initMs=Math.round(performance.now()-t);
+  const template=sessionModel?.tokenizer?.chat_template;
+  journal.templateInfo={present:typeof template==='string',includesDefaultSmolLM:typeof template==='string'&&template.includes('SmolLM'),length:typeof template==='string'?template.length:null};
+  modelLoaded=true;journal.status='model_ready';log('model_ready',{initMs:journal.initMs});say('CPUモデル起動成功。次の条件から比較できます。');
+ }catch(e){journal.status='model_load_error';journal.loadError=errorInfo(e);log('model_load_error',{error:journal.loadError});say('モデル起動に失敗。ログを確認してください。');}
+ finally{busy=false;render();}
+}
+async function runNext(){if(busy||!modelLoaded)return;const c=nextCondition();if(!c)return;
+ const attempt=journal.runs.filter(r=>r.condition===c.id).length+1;
+ const r={condition:c.id,label:c.label,attempt,state:'running',startedAt:now(),settings:{system:c.system,max_new_tokens:c.maxTokens,do_sample:false,repetition_penalty:c.penalty??1.0},answers:[]};
+ journal.runs.push(r);journal.status='condition_running';journal.pending={condition:c.id,question:'開始前',attempt};
+ if(!log('condition_started',{condition:c.id,attempt})){r.state='error';r.error={message:'生成前のログ保存に失敗'};journal.pending=null;render();return;}
+ busy=true;render();
+ try{
+  for(let i=0;i<QUESTIONS.length;i++){
+   const question=QUESTIONS[i];journal.pending={condition:c.id,question:question.id,attempt};
+   const messages=messagesFor(c,i,r.answers[0]?.answer||'');
+   const args={max_new_tokens:c.maxTokens,do_sample:false};if(c.penalty!=null)args.repetition_penalty=c.penalty;
+   if(!log('generation_started',{condition:c.id,question:question.id,messageCount:messages.length,maxTokens:c.maxTokens}))throw Error('生成開始ログの保存に失敗');
+   say(`${c.id}：${i+1}/3問目を生成中…`);render();
+   const t=performance.now(),output=await adapter.generate(messages,args);const answer=answerFrom(output);const elapsedMs=Math.round(performance.now()-t);
+   if(!answer.trim())throw Error('生成結果が空文字でした');
+   r.answers.push({question:question.id,user:question.user,context:question.context,answer,elapsedMs,historyMessages:messages.length});
+   if(!log('generation_finished',{condition:c.id,question:question.id,elapsedMs,chars:answer.length}))throw Error('回答の保存に失敗');
+   render();
+  }
+  r.state='complete';r.finishedAt=now();r.elapsedMs=r.answers.reduce((a,x)=>a+x.elapsedMs,0);qualityStats(r);journal.status='model_ready';journal.pending=null;
+  journal.completedConditions=journal.runs.filter(x=>x.state==='complete').length;
+  log('condition_finished',{condition:c.id,elapsedMs:r.elapsedMs,containsMango:r.containsMango,selfIntroCount:r.selfIntroCount});
+  say(`${c.id}完了。回答を比較して、次の条件へ進めます。`);
+ }catch(e){r.state='error';r.error=errorInfo(e);r.finishedAt=now();r.elapsedMs=r.answers.reduce((a,x)=>a+x.elapsedMs,0);journal.status='condition_error';journal.pending=null;log('condition_error',{condition:c.id,attempt,error:r.error});say(`${c.id}でエラー。自動再試行しません。同じ条件は最大1回だけ手動再試行可能です。`);}
+ finally{busy=false;if(!nextCondition()&&modelLoaded){journal.status='comparison_finished';log('comparison_finished',{complete:journal.completedConditions});await release();say('比較が終了しました。評価を入力してJSONを送ってください。');}render();}
+}
+$('check').addEventListener('click',cachePreflight);
+$('load').addEventListener('click',loadModel);
+$('nextButton').addEventListener('click',runNext);
+$('stop').addEventListener('click',async()=>{if(busy||!modelLoaded)return;busy=true;journal.status='stopped_manually';log('manual_stop');render();await release();busy=false;say('AIを解放しました。結果は保存済みです。');render();});
+$('copy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(JSON.stringify(journal,null,2));say('診断JSONをコピーしました。');}catch{say('コピーできない場合はJSON欄を長押ししてください。');}});
+$('review').addEventListener('click',()=>{try{const saved=JSON.parse(localStorage.getItem(LOG_KEY)||'null');if(saved&&saved.version===VERSION){journal=saved;render();say('端末内の記録を読み直しました。');}}catch{say('記録が読み込めません。');}});
+window.addEventListener('pagehide',e=>{if(busy||modelLoaded)log('pagehide',{status:journal.status,persisted:!!e.persisted});});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&(busy||modelLoaded))log('visibility_hidden',{status:journal.status});});
+restore();
+</script>
+</body></html>
