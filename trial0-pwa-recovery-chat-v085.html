@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1823">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Trial Zero AI">
+<title>Trial Zero v0.8.5 | PWA 自由会話・復元診断</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1823;--panel:#172c3a;--border:#3b5b68;--text:#f0fafb;--muted:#b7cdd7;--accent:#96e7cf;--warn:#ffdfa2;--danger:#ffc5c5}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.62 system-ui,-apple-system,sans-serif;padding:env(safe-area-inset-top) 14px env(safe-area-inset-bottom)}
+main{max-width:710px;margin:18px auto 48px}
+.eyebrow{font-weight:800;letter-spacing:.13em;color:var(--accent);font-size:11px}
+h1{font-size:clamp(24px,6.3vw,32px);margin:4px 0 8px;line-height:1.25}
+h2{font-size:17px;margin:0 0 10px}.sub,.fine{color:var(--muted)}.fine{font-size:12px;line-height:1.55}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:15px;margin:13px 0;padding:15px}
+.caution{background:#29271f;border-color:#877553}
+button{width:100%;border:1px solid #71c9b8;background:#196b61;border-radius:11px;min-height:48px;margin:5px 0;padding:11px 13px;font:700 15px system-ui;color:white;cursor:pointer}
+button.secondary{background:#2c4558;border-color:#72909e}button.warning{background:#604a39;border-color:#a58e68}
+button:disabled{opacity:.42;cursor:default}
+.stat{display:flex;align-items:start;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid #36505f}.stat:last-child{border:0}.stat strong{text-align:right;max-width:62%;overflow-wrap:anywhere}
+#status{color:var(--warn);min-height:30px;margin:9px 0;overflow-wrap:anywhere}
+textarea{width:100%;min-height:78px;max-height:180px;resize:vertical;border:1px solid #7596a6;background:#0d1d2b;border-radius:10px;padding:11px;color:white;font:16px/1.5 system-ui}textarea:disabled{opacity:.53}
+.chat{min-height:145px;max-height:460px;overflow:auto;background:#101f2c;border:1px solid #375063;border-radius:12px;padding:12px}
+.bubble{padding:11px 12px;border-radius:11px;margin:9px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.bubble.user{background:#304a61;margin-left:24px}.bubble.ai{background:#1a4a42;margin-right:24px}.bubble.incomplete{border:1px solid #998056}
+.label{display:block;font-size:11px;font-weight:750;color:#d5e9ed;margin-bottom:4px}
+.recovery{border:1px solid #9c8251;background:#302d24;border-radius:12px;padding:12px;margin:12px 0}
+code{color:#c6f4e7;overflow-wrap:anywhere}pre{overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;max-height:400px;border:1px solid #385465;border-radius:10px;background:#0c1b27;padding:12px;font:12px/1.55 ui-monospace,SFMono-Regular,monospace}
+.columns{display:grid;grid-template-columns:1fr 1fr;gap:8px}.hide{display:none !important}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">TRIAL ZERO / ON-DEVICE AI · RECOVERY TEST</div>
+<h1>自由会話＋履歴復元 <span class="fine">v0.8.5</span></h1>
+<p class="sub">PWAで成功したSmolLM2-135M <strong>CPU/WASM・q4f16</strong> をそのまま使い、短い自由会話、発言保存、再読み込みからの復元をまとめて検証する。</p>
+<section class="panel caution">
+<h2>この検証で守ること</h2>
+<p>必ず<strong>117MBモデルを保存した既存のホーム画面アイコン</strong>から開いてください。モデルの再ダウンロード・キャッシュ削除・Service Worker変更はしません。</p>
+<p class="fine">最大6入力（失敗・破棄した入力も含む）、1入力120文字、1回の生成は最大16トークン。負荷を抑えるためAIに渡すのは直近2往復＋今回の質問だけ。古い会話は画面と診断ログに残るが、毎回AIへ渡すわけではありません。</p>
+<p class="fine">会話と診断記録はこのPWAのlocalStorageに保存します。ページの突然の終了や保存領域の消去に対する完全な保証はありません。本人が記録をコピーするまで外部AIへ会話を送りません。ライブラリ・WASMのCDN通信は発生する場合があり、完全オフライン検証ではありません。個人情報は入力しないでください。</p>
+</section>
+<section class="panel">
+<h2>① 保存済みモデル・復元状態を確認</h2>
+<div class="stat"><span>起動方式 / PWA識別子</span><strong id="appValue">未確認</strong></div>
+<div class="stat"><span>モデルキャッシュ</span><strong id="cacheValue">未確認</strong></div>
+<div class="stat"><span>保存済みの会話</span><strong id="savedValue">0 件</strong></div>
+<div class="stat"><span>履歴復元</span><strong id="recoveryValue">未確認</strong></div>
+<button id="check">PWA・モデル・会話記録を確認</button>
+<div id="status" role="status" aria-live="polite">確認前です。</div>
+</section>
+<section class="panel">
+<h2>② CPU/WASMモデルを起動</h2>
+<p class="fine">5ファイルのキャッシュ確認に成功した場合のみ起動。再読み込み後も自動起動・自動再送はしません。この検証中のモデル起動は合計3回まで、1ページにつき1回。</p>
+<button id="start" disabled>キャッシュからAIを起動（通信でモデル再取得なし）</button>
+<button id="stop" class="secondary" disabled>AIを終了してメモリを解放</button>
+<div class="stat"><span>モデル初期化</span><strong id="initValue">未実施</strong></div>
+<div class="stat"><span>起動回数（この検証内）</span><strong id="loadsValue">0 / 3</strong></div>
+</section>
+<section class="panel">
+<h2>③ 自由入力チャット</h2>
+<div class="stat"><span>入力数</span><strong id="turnCount">0 / 6</strong></div>
+<div class="chat" id="chat" aria-label="会話履歴"><p class="sub">ここに会話が表示されます。</p></div>
+<div id="pendingBox" class="recovery hide">
+<strong>未完了の質問を検出</strong>
+<p class="fine" id="pendingInfo">前の質問を自動で送り直すことはありません。</p>
+<div class="columns"><button id="retry" class="warning" disabled>手動でもう一度送る</button><button id="discard" class="secondary">未完了として破棄</button></div>
+</div>
+<label for="prompt" class="fine">質問を入力（120文字まで・まず短い英語を推奨）</label>
+<textarea id="prompt" maxlength="120" disabled placeholder="Hello! Please answer briefly."></textarea>
+<div class="stat"><span>入力文字数</span><strong id="charCount">0 / 120</strong></div>
+<button id="send" disabled>メッセージを送信（送る直前に保存）</button>
+<p class="fine">生成が途中で止まった場合、最後の質問は残し、回答を未完了と表示する。復元できるのは保存済みの文字情報で、AI本体の推論状態ではありません。</p>
+</section>
+<section class="panel">
+<h2>④ 手動の再読み込み復元テスト</h2>
+<p class="fine">少なくとも1往復成功したあと、ここで安全に再読み込みできます。モデルを先に解放し、保存済み会話数を記録してから再読み込みするため、OS強制終了の再現実験ではありません。再読み込み後は①→②の順で手動再起動。</p>
+<button id="reload" class="secondary" disabled>保存してAIを解放 → 同じPWAを再読み込み</button>
+<div class="stat"><span>復元確認</span><strong id="reloadValue">未実施</strong></div>
+</section>
+<section class="panel">
+<h2>⑤ 診断ログ</h2>
+<button id="copy" class="secondary">会話・診断JSONをコピー</button>
+<button id="restore" class="secondary">保存されている診断記録を表示</button>
+<pre id="json">まだ記録がありません。</pre>
+<p class="fine">会話の全文がJSONに含まれます。共有前に内容を確認してください。v0.8.3・v0.8.4のログや117MBモデルには触れません。</p>
+</section>
+</main>
+<script type="module">
+'use strict';
+const VERSION='v0.8.5-pwa-recovery-chat';
+const ORIGIN='https://yakyouoranami723-cmd.github.io', ROOT='/trial0-device-probe/';
+const MODEL='onnx-community/SmolLM2-135M-Instruct-ONNX', DEVICE='wasm', DTYPE='q4f16', LIB='4.3.2';
+const CACHE='trial0-smollm135-v060', APP_KEY='trial0-v083-canonical-pwa';
+const EXPECTED_ID='e17e70bd-f0e6-4439-9168-ac6573c1c855';
+const JOURNAL_KEY='trial0-v085-recovery-journal', RELOAD_KEY='trial0-v085-controlled-reload';
+const MAX_TURNS=6, MAX_INPUT=120, MAX_TOKENS=16, CONTEXT_PAIRS=2, MAX_LOADS=3;
+const $=id=>document.getElementById(id), now=()=>new Date().toISOString();
+const validSite=location.origin===ORIGIN && location.pathname.startsWith(ROOT);
+const isPwa=()=>navigator.standalone===true || matchMedia('(display-mode: standalone)').matches;
+let generator=null, library=null, busy=false, checked=false, startedThisPage=false, storageHealthy=true;
+let journal=null;
+function newJournal(){return {version:VERSION,createdAt:now(),status:'new',model:MODEL,device:DEVICE,dtype:DTYPE,cacheKey:CACHE,modelDownloadAttempted:false,settings:{maxTurns:MAX_TURNS,maxInput:MAX_INPUT,maxNewTokens:MAX_TOKENS,contextPairs:CONTEXT_PAIRS},loadAttempts:0,reloadCount:0,interruptions:0,recoveredCount:0,turns:[],events:[]};}
+function errorInfo(e){return {name:String(e?.name||'Error'),message:String(e?.message||e||'unknown').slice(0,1000),stack:typeof e?.stack==='string'?e.stack.split('\n').slice(0,3).join('\n'):null};}
+function marker(){try{const x=JSON.parse(localStorage.getItem(APP_KEY)||'null');return x?.version==='v0.8.3-pwa-model-cache-only'&&typeof x.id==='string'?x:null;}catch{return null;}}
+function appOK(){return validSite && isPwa() && marker()?.id===EXPECTED_ID;}
+function completedCount(){return journal.turns.filter(t=>t.state==='complete').length;}
+function unresolved(){const t=journal.turns.at(-1);return t && ['pending','interrupted','failed'].includes(t.state)?t:null;}
+function say(s){$('status').textContent=s;}
+function event(name,extras={}){journal.events.push({at:now(),name,...extras});journal.events=journal.events.slice(-95);return persist();}
+function persist(){
+ journal.lastSavedAt=now();
+ try{localStorage.setItem(JOURNAL_KEY,JSON.stringify(journal));storageHealthy=true;renderLog();return true;}
+ catch(e){storageHealthy=false;journal.persistenceError=String(e?.message||e).slice(0,220);renderLog();say('診断データの保存に失敗。安全のため新しいAI処理を開始しません。');return false;}
+}
+function renderLog(){$('json').textContent=JSON.stringify(journal,null,2);}
+function showChat(){
+ const root=$('chat');root.replaceChildren();
+ if(journal.turns.length===0){const p=document.createElement('p');p.className='sub';p.textContent='短い文章を入力して会話を試してね。';root.append(p);return;}
+ for(const t of journal.turns){
+  const u=document.createElement('div');u.className='bubble user';const label=document.createElement('span');label.className='label';label.textContent='YOU · '+t.id+'通目';u.append(label,document.createTextNode(t.user));root.append(u);
+  const a=document.createElement('div');a.className='bubble ai'+(t.state!=='complete'?' incomplete':'');const al=document.createElement('span');al.className='label';al.textContent='TRIAL ZERO · '+t.state;a.append(al);
+  const answer=t.state==='complete'?t.answer:t.state==='discarded'?'(この質問は破棄しました)':t.state==='failed'?'(回答失敗。再送は手動のみ)':t.state==='interrupted'?'(前回の回答は未完了。自動再送なし)':'(回答を生成中…)';
+  a.append(document.createTextNode(answer||'(空文字)'));root.append(a);
+ }
+ root.scrollTop=root.scrollHeight;
+}
+function showSummary(){
+ $('appValue').textContent=isPwa()?(marker()?.id||'PWA / 保管先IDなし'):'Safari等（実行不可）';
+ $('cacheValue').textContent=journal.cacheStatus?.allCached?'5/5 キャッシュ認識':'未確認 / 不足';
+ $('savedValue').textContent=completedCount()+'往復完了・'+journal.turns.length+'入力を保存';
+ $('turnCount').textContent=journal.turns.length+' / '+MAX_TURNS;
+ $('loadsValue').textContent=journal.loadAttempts+' / '+MAX_LOADS;
+ $('initValue').textContent=generator?'起動中（'+(journal.modelInitMs??'?')+'ms）':journal.modelInitMs!=null?'前回の初期化 '+journal.modelInitMs+'ms':'未実施';
+ $('charCount').textContent=$('prompt').value.length+' / '+MAX_INPUT;
+ $('recoveryValue').textContent=journal.interruptions?journal.interruptions+'件の未完了処理を検出':journal.recoveredCount?'履歴復元 '+journal.recoveredCount+'回':'保存済み履歴 '+journal.turns.length+'入力';
+ $('reloadValue').textContent=journal.reloadRecovery?.success?'復元確認成功 ('+journal.reloadRecovery.restoredCompleted+'往復)':'未実施';
+ const pending=unresolved();$('pendingBox').classList.toggle('hide',!pending);
+ if(pending)$('pendingInfo').textContent='質問「'+pending.user.slice(0,90)+'」の回答が未完了。自動再送はしません。生成時の試行 '+pending.attempts+'/2回。';
+}
+function refresh(){
+ const active=!!generator,pending=unresolved(),finished=journal.turns.length>=MAX_TURNS;
+ $('check').disabled=busy||!validSite;
+ $('start').disabled=busy||!checked||!appOK()||active||startedThisPage||journal.loadAttempts>=MAX_LOADS||finished||!storageHealthy;
+ $('stop').disabled=busy||!active;
+ $('prompt').disabled=busy||!active||!!pending||finished||!storageHealthy;
+ $('send').disabled=busy||!active||!!pending||finished||!$('prompt').value.trim()||!storageHealthy;
+ $('retry').disabled=busy||!active||!pending||pending.attempts>=2||!storageHealthy;
+ $('discard').disabled=busy||!pending||!storageHealthy;
+ $('reload').disabled=busy||!appOK()||completedCount()===0||!storageHealthy||journal.loadAttempts>=MAX_LOADS;
+ $('restore').disabled=busy||active;
+ showSummary();
+}
+function loadJournal(){
+ let prior=null;
+ try{prior=JSON.parse(localStorage.getItem(JOURNAL_KEY)||'null');}catch{}
+ journal=prior&&prior.version===VERSION&&Array.isArray(prior.turns)&&Array.isArray(prior.events)?prior:newJournal();
+ journal.loadAttempts=Number.isSafeInteger(journal.loadAttempts)?journal.loadAttempts:0;
+ journal.reloadCount=Number.isSafeInteger(journal.reloadCount)?journal.reloadCount:0;
+ journal.interruptions=Number.isSafeInteger(journal.interruptions)?journal.interruptions:0;
+ journal.recoveredCount=Number.isSafeInteger(journal.recoveredCount)?journal.recoveredCount:0;
+ const before=journal.status;
+ const pending=unresolved();
+ if(prior && ['initializing','model_ready','checking_cache'].includes(before)) journal.events.push({at:now(),name:'previous_page_state_not_recovered',previousStatus:before,reason:'Webページ再起動のためモデル状態は失われた。原因は未確定'});
+ if(pending&&pending.state==='pending'){
+   pending.state='interrupted';pending.interruptedAt=now();journal.interruptions++;
+   journal.events.push({at:now(),name:'unfinished_generation_restored',turn:pending.id,previousStatus:before});
+ }
+ let requested=null;
+ try{requested=JSON.parse(localStorage.getItem(RELOAD_KEY)||'null');localStorage.removeItem(RELOAD_KEY);}catch{}
+ if(requested?.version===VERSION&&typeof requested.completed==='number'){
+   const success=completedCount()===requested.completed && journal.turns.length===requested.total;
+   journal.reloadRecovery={success,restoredCompleted:completedCount(),expectedCompleted:requested.completed,restoredTotal:journal.turns.length,expectedTotal:requested.total,confirmedAt:now()};
+   journal.events.push({at:now(),name:'controlled_reload_recovery',success,completed:completedCount()});
+ }
+ if(prior){journal.recoveredCount++;journal.events.push({at:now(),name:'journal_restored',previousStatus:before,completed:completedCount(),turnCount:journal.turns.length});}
+ journal.events=journal.events.slice(-95);
+ journal.status=before==='generating'?'interrupted_at_last_generation':'not_running_after_reload';
+ if(!prior)journal.status='new';
+ if(!persist())say('履歴保存に失敗。AIは起動しません。');
+ else if(!appOK())say('正しい保管先PWAではありません。モデルを保存した元のホーム画面アイコンを使用してください。');
+ else if(pending)say('前回の生成が未完了。質問は保存されています。①②でAIを起動した後、再送するか破棄を選択できます。');
+ else if(prior)say('保存済みの会話を復元しました。モデル自体は停止しています。①→②で手動再起動できます。');
+ else say('PWAの保存領域確認から始めてください。');
+ showChat();refresh();
+}
+async function runtime(){
+ if(library)return library;
+ const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2');
+ m.env.useBrowserCache=true;m.env.useWasmCache=true;m.env.cacheKey=CACHE;
+ m.env.allowLocalModels=false;m.env.allowRemoteModels=true;
+ if(m.env.backends?.onnx?.wasm)m.env.backends.onnx.wasm.numThreads=1;
+ const nativeFetch=globalThis.fetch.bind(globalThis);
+ m.env.fetch=async(input,init)=>{
+   const raw=typeof input==='string'?input:(input?.url||String(input));
+   let u;try{u=new URL(raw,location.href);}catch{throw Error('無効なモデルURL');}
+   if(u.origin!==location.origin && u.hostname!=='cdn.jsdelivr.net'){
+     journal.blockedModelRequests=(journal.blockedModelRequests||[]).slice(-5).concat([{at:now(),host:u.hostname,path:u.pathname.slice(0,90)}]);
+     persist();throw Error('モデルの外部再取得を遮断: '+u.hostname);
+   }
+   return nativeFetch(input,init);
+ };
+ library=m;return m;
+}
+async function cacheCheck(){
+ const m=await runtime();
+ if(typeof m.ModelRegistry?.is_pipeline_cached_files!=='function')throw Error('公式モデルキャッシュ確認APIなし');
+ return await m.ModelRegistry.is_pipeline_cached_files('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+}
+async function release(){
+ if(!generator)return;
+ const current=generator;generator=null;
+ try{await current.dispose?.();event('pipeline_disposed');}
+ catch(e){event('pipeline_dispose_error',{error:errorInfo(e)});}
+}
+function answerFrom(output){
+ const raw=output?.[0]?.generated_text;
+ if(Array.isArray(raw)){const last=raw.at(-1);return last?.role==='assistant'&&typeof last.content==='string'?last.content:'';}
+ return typeof raw==='string'?raw:'';
+}
+function contextMessages(user){
+ const completed=journal.turns.filter(t=>t.state==='complete').slice(-CONTEXT_PAIRS);
+ const result=[];
+ for(const t of completed){result.push({role:'user',content:t.user},{role:'assistant',content:t.answer});}
+ result.push({role:'user',content:user});
+ return result;
+}
+async function generateFor(turn){
+ if(busy||!generator||!storageHealthy||turn.attempts>=2)return;
+ const messages=contextMessages(turn.user);
+ turn.attempts++;turn.state='pending';turn.startedAt=now();journal.status='generating';
+ // Persist the complete user question and pending state BEFORE inference.
+ if(!event('generation_started',{turn:turn.id,attempt:turn.attempts,messages:messages.length,inputLength:turn.user.length})){
+   turn.state='failed';turn.error={message:'保存失敗のため生成を中止'};refresh();return;
+ }
+ busy=true;showChat();refresh();say('端末内CPU/WASMで回答生成中…');
+ try{
+   const t=performance.now();const output=await generator(messages,{max_new_tokens:MAX_TOKENS,do_sample:false});const answer=answerFrom(output);const ms=Math.round(performance.now()-t);
+   if(!answer.trim())throw Error('生成結果が空文字');
+   turn.answer=answer;turn.state='complete';turn.completedAt=now();turn.elapsedMs=ms;
+   turn.contextMessageCount=messages.length;journal.status='model_ready';
+   event('generation_finished',{turn:turn.id,elapsedMs:ms,answerLength:answer.length,contextMessages:messages.length});
+   say(turn.id+'通目の回答を保存しました（'+ms+'ms）。');
+ }catch(e){
+   turn.state='failed';turn.error=errorInfo(e);turn.failedAt=now();journal.status='generation_failed';
+   event('generation_failed',{turn:turn.id,attempt:turn.attempts,error:turn.error});
+   say('回答生成でエラー。自動再試行しません。診断JSONを確認してください。');
+ }
+ finally{
+   busy=false;showChat();refresh();
+   if(journal.turns.length>=MAX_TURNS && !unresolved() && generator){
+     busy=true;refresh();journal.status='max_turns_reached';event('session_finished',{reason:'max_turns_reached'});await release();busy=false;refresh();say('最大6入力の検証終了。JSONをコピーして送ってください。');
+   }
+ }
+}
+$('check').addEventListener('click',async()=>{
+ if(busy||!validSite)return;
+ busy=true;checked=false;refresh();journal.status='checking_cache';event('cache_check_started');say('既存のPWAとモデルのキャッシュを確認中…');
+ try{
+   journal.environment={standalone:isPwa(),appleStandalone:navigator.standalone===true,appId:marker()?.id||null,expectedIdMatched:appOK()};
+   if(!appOK())throw Error('117MBモデルを保存したPWA識別子と一致しません');
+   journal.cacheStatus=await cacheCheck();
+   if(journal.cacheStatus?.allCached!==true)throw Error('5ファイルが揃っていないため、モデルを起動しません');
+   checked=true;journal.status='cache_ready';event('cache_check_pass',{allCached:true});
+   say('モデル5/5を認識。②でCPU/WASMを起動できます。');
+ }catch(e){journal.status='cache_check_error';journal.error=errorInfo(e);event('cache_check_error',{error:journal.error});say('キャッシュ確認で停止。モデルは取得しません。JSONを送ってください。');}
+ finally{busy=false;refresh();}
+});
+$('start').addEventListener('click',async()=>{
+ if(busy||!checked||!appOK()||generator||startedThisPage||journal.loadAttempts>=MAX_LOADS)return;
+ startedThisPage=true;journal.loadAttempts++;journal.status='initializing';
+ if(!event('model_load_started',{attempt:journal.loadAttempts})){startedThisPage=false;refresh();return;}
+ busy=true;refresh();say('保存済みモデルをCPU/WASMで起動中…');
+ try{
+   const cache=await cacheCheck();if(cache.allCached!==true)throw Error('起動直前にキャッシュ不足');
+   const m=await runtime();const t=performance.now();generator=await m.pipeline('text-generation',MODEL,{device:DEVICE,dtype:DTYPE});
+   journal.modelInitMs=Math.round(performance.now()-t);journal.status='model_ready';event('model_ready',{elapsedMs:journal.modelInitMs});
+   say('AI起動成功。保存済み履歴から続きを会話できます。');
+ }catch(e){journal.status='model_load_error';journal.loadError=errorInfo(e);event('model_load_error',{error:journal.loadError});await release();say('AI起動で停止。自動再起動なし。JSONを送ってください。');}
+ finally{busy=false;refresh();}
+});
+$('send').addEventListener('click',async()=>{
+ if(busy||!generator||unresolved()||journal.turns.length>=MAX_TURNS)return;
+ const prompt=$('prompt').value.trim();if(!prompt||prompt.length>MAX_INPUT)return;
+ const turn={id:journal.turns.length+1,user:prompt,answer:null,state:'pending',attempts:0,createdAt:now()};
+ journal.turns.push(turn);
+ // If the write fails, do not generate; keep the draft in the textarea.
+ if(!persist()){journal.turns.pop();refresh();return;}
+ $('prompt').value='';showChat();refresh();await generateFor(turn);
+});
+$('retry').addEventListener('click',async()=>{
+ const t=unresolved();if(!t||!generator||busy||t.attempts>=2)return;
+ await generateFor(t);
+});
+$('discard').addEventListener('click',()=>{
+ const t=unresolved();if(!t||busy||!storageHealthy)return;
+ t.state='discarded';t.discardedAt=now();journal.status='question_discarded';
+ event('question_discarded',{turn:t.id});showChat();refresh();say('未完了の質問を破棄。記録には残し、次の質問へ進めます。');
+});
+$('stop').addEventListener('click',async()=>{
+ if(busy||!generator)return;busy=true;refresh();journal.status='manually_stopped';event('model_stop_requested');await release();busy=false;refresh();say('モデルを解放しました。会話の文字情報は保存されています。');
+});
+$('reload').addEventListener('click',async()=>{
+ if(busy||!appOK()||completedCount()===0||!storageHealthy||journal.loadAttempts>=MAX_LOADS)return;
+ busy=true;refresh();
+ try{
+   journal.status='controlled_reload';journal.reloadCount++;
+   if(!event('controlled_reload_requested',{completed:completedCount(),total:journal.turns.length}))throw Error('診断保存に失敗');
+   localStorage.setItem(RELOAD_KEY,JSON.stringify({version:VERSION,completed:completedCount(),total:journal.turns.length,at:now()}));
+   await release();
+   // Navigation deliberately happens only after local persistence + release.
+   location.reload();
+ }catch(e){journal.reloadError=errorInfo(e);event('controlled_reload_error',{error:journal.reloadError});busy=false;refresh();say('再読み込み処理を中断しました。ログを確認してください。');}
+});
+$('prompt').addEventListener('input',refresh);
+$('copy').addEventListener('click',async()=>{
+ try{await navigator.clipboard.writeText(JSON.stringify(journal,null,2));say('JSONをコピーしました。会話全文が含まれます。');}
+ catch{say('コピーできない場合はJSON欄を長押ししてコピーしてください。');}
+});
+$('restore').addEventListener('click',()=>{if(busy||generator)return;try{const saved=JSON.parse(localStorage.getItem(JOURNAL_KEY)||'null');$('json').textContent=JSON.stringify(saved||journal,null,2);say('保存済みの診断JSONを表示しました（AIや履歴の再起動は行いません）。');}catch(e){say('保存済みJSONの読み取りに失敗しました。');}});
+window.addEventListener('pagehide',e=>{if(busy||generator)event('pagehide',{activeModel:!!generator,status:journal.status,persisted:!!e.persisted});});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&(busy||generator))event('visibility_hidden',{status:journal.status});});
+loadJournal();
+</script>
+</body>
+</html>
